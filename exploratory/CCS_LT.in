@@ -1,0 +1,199 @@
+!CO2 Storage Cross section - long term effects - Constant thermal gradient
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW Flow
+      MODE GAS_WATER
+      OPTIONS
+        ISOTHERMAL
+        RESERVOIR_DEFAULTS
+      /
+    / ! end of subsurface_flow
+  / ! end of process models
+END  !! end simulation block
+
+SUBSURFACE
+
+#=========================== discretization ===================================
+
+GRID
+  TYPE grdecl ccs_lt.grdecl
+END
+
+#=========================== times ============================================
+
+TIME
+  FINAL_TIME 5000 y
+  INITIAL_TIMESTEP_SIZE 0.1 d
+  MAXIMUM_TIMESTEP_SIZE 50 d at 0 d
+  MAXIMUM_TIMESTEP_SIZE 250 d at 1 y
+  MAXIMUM_TIMESTEP_SIZE 1000 d at 25 y
+  MAXIMUM_TIMESTEP_SIZE 10000 d at 250 y
+END
+
+#=========================== output options ===================================
+
+OUTPUT
+  MASS_BALANCE_FILE
+   PERIODIC TIMESTEP 1  
+  END
+  ECLIPSE_FILE
+    TIMES d 2500 1825000
+    PERIOD_SUM TIMESTEP 5
+    PERIOD_RST TIMESTEP 25
+    OUTFILE
+  END
+  LINEREPT
+END
+
+#=========================== material properties ==============================
+
+MATERIAL_PROPERTY formation
+  ID 1
+  ROCK_COMPRESSIBILITY    4.35d-5 1/Bar
+  ROCK_REFERENCE_PRESSURE 1.0     Bar
+  CHARACTERISTIC_CURVES ch1
+/
+
+#=========================== saturation functions =============================
+
+CHARACTERISTIC_CURVES ch1
+
+ TABLE swfn_table
+   PRESSURE_UNITS Bar
+   SWFN
+     0.0    0    0.4
+     0.1    0    0.3
+     0.9    1    0.2
+     1.0    1    0.1
+   /
+ END
+
+ TABLE sgfn_table
+  PRESSURE_UNITS Bar
+    SGFN
+     0.0     0     0 
+     0.10   0.0    0 
+     0.255  0.15   0 
+     0.51   0.4    0 
+     0.765  0.8    0 
+     1.0    1.0    0
+    /
+ END
+
+/
+
+#=========================== fluid properties =================================
+
+FLUID_PROPERTY
+  PHASE LIQUID
+  DIFFUSION_COEFFICIENT 2.0d-9
+/
+FLUID_PROPERTY
+  PHASE GAS
+  DIFFUSION_COEFFICIENT 2.0d-5
+/
+
+BRINE 1.092 MOLAL
+
+EOS WATER
+ SURFACE_DENSITY 1000.0 kg/m^3
+END
+
+EOS GAS
+  SURFACE_DENSITY 1.8 kg/m^3
+  CO2_DATABASE co2_dbase.dat
+END
+
+#=========================== Equilibration ==================================
+
+EQUILIBRATION
+
+  PRESSURE 80.0 Bar
+  DATUM_D  800 m
+
+  GAS_IN_LIQUID_MOLE_FRACTION 0.0
+
+  TEMPERATURE_TABLE
+    D_UNITS m
+    TEMPERATURE_UNITS C !cannot be otherwise
+    RTEMPVD
+     800  29
+     1000 35
+     1200 41
+    /
+  END
+ 
+/
+
+#=========================== Wells ==================================
+
+WELL_DATA injg
+  WELL_TYPE GAS_INJECTOR
+  BHPL     1000    Bar
+  TARG_GM 1.0 Mt/y
+  CIJK_D   25 1 50 50
+  TIME 2500 day
+  SHUT
+END
+
+WELL_DATA prod
+  WELL_TYPE PRODUCER
+  BHPL     120.5    Bar
+  TARG_WSV 10000 m^3/day
+  CIJK_D   1 1 100 100
+  CIJK_D   2 1 100 100
+  CIJK_D   3 1 100 100
+  CIJK_D   4 1 100 100
+  CIJK_D   5 1 100 100
+  CIJK_D   6 1 100 100
+  CIJK_D   7 1 100 100
+  CIJK_D   8 1 100 100
+  CIJK_D   9 1 100 100
+  CIJK_D  10 1 100 100
+  CIJK_D  11 1 100 100
+  CIJK_D  12 1 100 100
+  CIJK_D  13 1 100 100
+  CIJK_D  14 1 100 100
+  CIJK_D  15 1 100 100
+  CIJK_D  16 1 100 100
+  CIJK_D  17 1 100 100
+  CIJK_D  18 1 100 100
+  CIJK_D  19 1 100 100
+  CIJK_D  20 1 100 100
+  CIJK_D  21 1 100 100
+  CIJK_D  22 1 100 100
+  CIJK_D  23 1 100 100
+  CIJK_D  24 1 100 100
+  CIJK_D  25 1 100 100
+  CIJK_D  26 1 100 100
+  CIJK_D  27 1 100 100
+  CIJK_D  28 1 100 100
+  CIJK_D  29 1 100 100
+  CIJK_D  30 1 100 100
+  CIJK_D  31 1 100 100
+  CIJK_D  32 1 100 100
+  CIJK_D  33 1 100 100
+  CIJK_D  34 1 100 100
+  CIJK_D  35 1 100 100
+  CIJK_D  36 1 100 100
+  CIJK_D  37 1 100 100
+  CIJK_D  38 1 100 100
+  CIJK_D  39 1 100 100
+  CIJK_D  40 1 100 100
+  CIJK_D  41 1 100 100
+  CIJK_D  42 1 100 100
+  CIJK_D  43 1 100 100
+  CIJK_D  44 1 100 100
+  CIJK_D  45 1 100 100
+  CIJK_D  46 1 100 100
+  CIJK_D  47 1 100 100
+  CIJK_D  48 1 100 100
+  CIJK_D  49 1 100 100
+  CIJK_D  50 1 100 100
+END
+
+#================================================================================
+
+END_SUBSURFACE
