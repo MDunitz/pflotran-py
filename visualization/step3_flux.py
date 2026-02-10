@@ -9,8 +9,6 @@ Units are pulled from shared_utils so tooltips always match computed values.
 """
 
 import os
-import pandas as pd
-import numpy as np
 from bokeh.plotting import figure, save, output_file
 from bokeh.layouts import column, row
 from bokeh.models import HoverTool, ColumnDataSource
@@ -29,11 +27,10 @@ from shared_utils import (
     FLUX_UNITS,
 )
 
-
 # Default species mapping: short name → DataFrame column
 DEFAULT_SPECIES_MAP = {
-    'CO2': 'CO2(aq) [M]',
-    'CH4': 'Free CH4(aq) [M]',
+    "CO2": "CO2(aq) [M]",
+    "CH4": "Free CH4(aq) [M]",
 }
 
 # Default simulation temperature for Stokes-Einstein correction
@@ -61,7 +58,8 @@ def create_hover_tool(species, conc_col, renderers, use_flux=False):
             ("Y [m]", "@{Y [m]}{0.00}"),
             ("Z [m]", "@{Z [m]}{0.00}"),
             (f"{species} Concentration [M]", f"@{{{conc_col}}}"),
-        ] + tips,
+        ]
+        + tips,
         renderers=renderers,
     )
 
@@ -69,25 +67,29 @@ def create_hover_tool(species, conc_col, renderers, use_flux=False):
 def identify_surface_cells(df):
     """Mark cells at the top of each (X,Y) column as surface cells."""
     surface_df = df.copy()
-    surface_df['is_surface'] = False
+    surface_df["is_surface"] = False
 
-    for time_idx in df['Time Index'].unique():
-        time_mask = df['Time Index'] == time_idx
+    for time_idx in df["Time Index"].unique():
+        time_mask = df["Time Index"] == time_idx
         time_data = df[time_mask]
 
-        max_z_by_xy = time_data.groupby(['X [m]', 'Y [m]'])['Z [m]'].max().reset_index()
-        max_z_by_xy.columns = ['X [m]', 'Y [m]', 'max_z']
+        max_z_by_xy = time_data.groupby(["X [m]", "Y [m]"])["Z [m]"].max().reset_index()
+        max_z_by_xy.columns = ["X [m]", "Y [m]", "max_z"]
 
-        merged = time_data.merge(max_z_by_xy, on=['X [m]', 'Y [m]'])
-        surface_indices = merged[merged['Z [m]'] == merged['max_z']].index
-        surface_df.loc[surface_indices, 'is_surface'] = True
+        merged = time_data.merge(max_z_by_xy, on=["X [m]", "Y [m]"])
+        surface_indices = merged[merged["Z [m]"] == merged["max_z"]].index
+        surface_df.loc[surface_indices, "is_surface"] = True
 
     return surface_df
 
 
 def _magnitude_col(species, use_flux):
     """Return the magnitude column name for gradient or flux."""
-    return flux_col(species, 'magnitude') if use_flux else gradient_col(species, 'magnitude')
+    return (
+        flux_col(species, "magnitude")
+        if use_flux
+        else gradient_col(species, "magnitude")
+    )
 
 
 def _units_label(use_flux):
@@ -95,8 +97,13 @@ def _units_label(use_flux):
 
 
 def create_surface_visualization(
-    df, species_map, n_timesteps=5, output_dir='.', output_filename='co2_ch4_surface_visualization.html',
-    use_flux=False, verbose=False,
+    df,
+    species_map,
+    n_timesteps=5,
+    output_dir=".",
+    output_filename="co2_ch4_surface_visualization.html",
+    use_flux=False,
+    verbose=False,
 ):
     """Create 2D surface maps of gradient or flux magnitude.
 
@@ -111,24 +118,30 @@ def create_surface_visualization(
     use_flux : bool
         If True, color by flux magnitude; otherwise by gradient magnitude
     """
-    time_indices = sorted(df['Time Index'].unique())
+    time_indices = sorted(df["Time Index"].unique())
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_filename)
     output_file(output_path)
 
     species_list = list(species_map.keys())
     units = _units_label(use_flux)
-    quantity = 'Flux |J|' if use_flux else 'Gradient |∇C|'
+    quantity = "Flux |J|" if use_flux else "Gradient |∇C|"
 
     plots = []
     for time_idx in time_indices[:n_timesteps]:
-        time_data = df[df['Time Index'] == time_idx]
-        surface_data = time_data[time_data['is_surface']] if 'is_surface' in time_data.columns else time_data
+        time_data = df[df["Time Index"] == time_idx]
+        surface_data = (
+            time_data[time_data["is_surface"]]
+            if "is_surface" in time_data.columns
+            else time_data
+        )
         if len(surface_data) == 0:
             surface_data = time_data
 
         # Skip if no signal at all
-        magnitudes = [surface_data[_magnitude_col(s, use_flux)].max() for s in species_list]
+        magnitudes = [
+            surface_data[_magnitude_col(s, use_flux)].max() for s in species_list
+        ]
         if all(m <= 1e-25 for m in magnitudes):
             if verbose:
                 print(f"Skipping time step {time_idx} — no signal above 1e-25")
@@ -142,19 +155,26 @@ def create_surface_visualization(
 
             p = figure(
                 title=f"{species} {quantity} [{units}] — t={time_idx}",
-                x_axis_label="X [m]", y_axis_label="Y [m]",
-                width=400, height=400,
+                x_axis_label="X [m]",
+                y_axis_label="Y [m]",
+                width=400,
+                height=400,
                 tools="pan,wheel_zoom,box_zoom,reset,save",
             )
 
             if vmax > vmin and vmax > 1e-25:
                 source = ColumnDataSource(surface_data)
                 circles = p.scatter(
-                    'X [m]', 'Y [m]', size=15,
+                    "X [m]",
+                    "Y [m]",
+                    size=15,
                     color=linear_cmap(mag_col, Viridis256, vmin, vmax),
-                    source=source, alpha=0.7,
+                    source=source,
+                    alpha=0.7,
                 )
-                hover = create_hover_tool(species, species_map[species], [circles], use_flux=use_flux)
+                hover = create_hover_tool(
+                    species, species_map[species], [circles], use_flux=use_flux
+                )
                 p.add_tools(hover)
 
             row_plots.append(p)
@@ -167,8 +187,12 @@ def create_surface_visualization(
 
 
 def main(
-    species_map=None, n_timesteps=5, output_dir='.', output_filename='co2_ch4_surface_visualization.html',
-    compute_flux=True, temperature_c=DEFAULT_TEMPERATURE_C,
+    species_map=None,
+    n_timesteps=5,
+    output_dir=".",
+    output_filename="co2_ch4_surface_visualization.html",
+    compute_flux=True,
+    temperature_c=DEFAULT_TEMPERATURE_C,
 ):
     species_map = species_map or DEFAULT_SPECIES_MAP
     print("Starting PFLOTRAN Surface Visualization...")
@@ -190,16 +214,22 @@ def main(
 
     # Create both gradient and flux visualizations
     create_surface_visualization(
-        df, species_map, n_timesteps=n_timesteps,
-        output_dir=output_dir, output_filename=output_filename,
+        df,
+        species_map,
+        n_timesteps=n_timesteps,
+        output_dir=output_dir,
+        output_filename=output_filename,
         use_flux=False,
     )
 
     if compute_flux:
-        flux_filename = output_filename.replace('.html', '_flux.html')
+        flux_filename = output_filename.replace(".html", "_flux.html")
         create_surface_visualization(
-            df, species_map, n_timesteps=n_timesteps,
-            output_dir=output_dir, output_filename=flux_filename,
+            df,
+            species_map,
+            n_timesteps=n_timesteps,
+            output_dir=output_dir,
+            output_filename=flux_filename,
             use_flux=True,
         )
 

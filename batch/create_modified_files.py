@@ -16,19 +16,18 @@ import sys
 import argparse
 
 # Add the master_input_generator directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'generator'))
-from pflotran_generator import PFLOTRANGenerator
-
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "generator"))
+from pflotran_generator import PFLOTRANGenerator  # noqa: E402
 
 # Seawater baseline concentrations [mol/L] at 1× salinity
 # Ref: Millero (2013) Chemical Oceanography, Table 2.1
 SEAWATER_1X = {
-    'Cl-':   5.36e-01,
-    'Na+':   4.59e-01,
-    'Mg++':  5.23e-02,
-    'SO4--': 2.76e-02,
-    'Ca++':  1.00e-02,
-    'K+':    9.72e-03,
+    "Cl-": 5.36e-01,
+    "Na+": 4.59e-01,
+    "Mg++": 5.23e-02,
+    "SO4--": 2.76e-02,
+    "Ca++": 1.00e-02,
+    "K+": 9.72e-03,
 }
 
 
@@ -49,13 +48,13 @@ def scale_seawater(multiplier):
     scaled = {}
     for ion, baseline in SEAWATER_1X.items():
         conc = baseline * multiplier
-        constraint_type = 'Z' if ion == 'Cl-' else 'T'
-        scaled[ion] = f'{conc:.3e} {constraint_type}'
+        constraint_type = "Z" if ion == "Cl-" else "T"
+        scaled[ion] = f"{conc:.3e} {constraint_type}"
     return scaled
 
 
 def create_modified_files(
-    output_dir='modified_pflotran_files',
+    output_dir="modified_pflotran_files",
     min_multiplier=1,
     max_multiplier=20,
     **generator_kwargs,
@@ -82,21 +81,23 @@ def create_modified_files(
             concentrations=concentrations,
             **generator_kwargs,
         )
-        filename = os.path.join(output_dir, f'9_addnitrogen_{multiplier}M.in')
+        filename = os.path.join(output_dir, f"9_addnitrogen_{multiplier}M.in")
         generator.generate(filename)
 
     n_files = max_multiplier - min_multiplier + 1
-    print(f'\nGenerated {n_files} files in {output_dir}/')
+    print(f"\nGenerated {n_files} files in {output_dir}/")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Generate PFLOTRAN input files at varying salinity.')
-    parser.add_argument('--output-dir', default='modified_pflotran_files')
-    parser.add_argument('--min-multiplier', type=int, default=1)
-    parser.add_argument('--max-multiplier', type=int, default=20)
-    parser.add_argument('--aw-threshold', type=float, default=0.5)
-    parser.add_argument('--dimensions', default='1d', choices=['1d', '2d', '3d'])
-    parser.add_argument('--temperature', type=float, default=8.0)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate PFLOTRAN input files at varying salinity."
+    )
+    parser.add_argument("--output-dir", default="modified_pflotran_files")
+    parser.add_argument("--min-multiplier", type=int, default=1)
+    parser.add_argument("--max-multiplier", type=int, default=20)
+    parser.add_argument("--aw-threshold", type=float, default=0.5)
+    parser.add_argument("--dimensions", default="1d", choices=["1d", "2d", "3d"])
+    parser.add_argument("--temperature", type=float, default=8.0)
     args = parser.parse_args()
 
     create_modified_files(
@@ -107,4 +108,3 @@ if __name__ == '__main__':
         dimensions=args.dimensions,
         temperature=args.temperature,
     )
-

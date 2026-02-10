@@ -40,22 +40,21 @@ import os
 import sys
 import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'generator'))
-from pflotran_generator import PFLOTRANGenerator
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "generator"))
+from pflotran_generator import PFLOTRANGenerator  # noqa: E402
 
 # Import seawater scaling from reproducible_varconc
 # create_modified_files is in the same directory
-from create_modified_files import scale_seawater
-
+from create_modified_files import scale_seawater  # noqa: E402
 
 VARIANTS = {
-    'A_cl_only':   {'enable_cl_inhibition': True,  'enable_aw_sandbox': False},
-    'B_aw_only':   {'enable_cl_inhibition': False, 'enable_aw_sandbox': True},
-    'C_both':      {'enable_cl_inhibition': True,  'enable_aw_sandbox': True},
+    "A_cl_only": {"enable_cl_inhibition": True, "enable_aw_sandbox": False},
+    "B_aw_only": {"enable_cl_inhibition": False, "enable_aw_sandbox": True},
+    "C_both": {"enable_cl_inhibition": True, "enable_aw_sandbox": True},
 }
 
 
-def generate_test_files(multiplier=5, output_dir='inhibition_test', **kwargs):
+def generate_test_files(multiplier=5, output_dir="inhibition_test", **kwargs):
     """Generate three PFLOTRAN input files for the inhibition diagnostic.
 
     Parameters
@@ -77,23 +76,27 @@ def generate_test_files(multiplier=5, output_dir='inhibition_test', **kwargs):
             **flags,
             **kwargs,
         )
-        filename = os.path.join(output_dir, f'{variant_name}_{multiplier}x.in')
+        filename = os.path.join(output_dir, f"{variant_name}_{multiplier}x.in")
         gen.generate(filename)
         print()
 
     print(f"\nGenerated {len(VARIANTS)} files in {output_dir}/")
     print(f"Seawater multiplier: {multiplier}×")
     print(f"Cl⁻ concentration: {float(concentrations['Cl-'].split()[0]):.3f} M")
-    print(f"\nRun all three with PFLOTRAN, then compare CH₄(aq) profiles.")
+    print("\nRun all three with PFLOTRAN, then compare CH₄(aq) profiles.")
     print("If C << A·B/uninhibited → double-counting confirmed → use a_w only.")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Generate inhibition diagnostic test files.')
-    parser.add_argument('--multiplier', type=float, default=5.0, help='Seawater multiplier (default: 5)')
-    parser.add_argument('--output-dir', default='inhibition_test')
-    parser.add_argument('--temperature', type=float, default=8.0)
-    parser.add_argument('--dimensions', default='1d', choices=['1d', '2d', '3d'])
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate inhibition diagnostic test files."
+    )
+    parser.add_argument(
+        "--multiplier", type=float, default=5.0, help="Seawater multiplier (default: 5)"
+    )
+    parser.add_argument("--output-dir", default="inhibition_test")
+    parser.add_argument("--temperature", type=float, default=8.0)
+    parser.add_argument("--dimensions", default="1d", choices=["1d", "2d", "3d"])
     args = parser.parse_args()
 
     generate_test_files(
@@ -102,4 +105,3 @@ if __name__ == '__main__':
         temperature=args.temperature,
         dimensions=args.dimensions,
     )
-

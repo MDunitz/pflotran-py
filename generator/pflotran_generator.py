@@ -20,16 +20,22 @@ Sources:
     See REFERENCES.md for full citations and parameter derivations.
 """
 
-import os
 from datetime import datetime
 
 from pflotran_templates import (
-    HEADER, PRIMARY_SPECIES, SECONDARY_SPECIES, MINERALS,
-    MINERAL_KINETICS_AND_SORPTION, CHEMISTRY_OUTPUT, SOLVER,
-    FLUID_PROPERTIES, MATERIAL_PROPERTIES, OUTPUT_OPTIONS,
-    MICROBIAL_REACTIONS, GENERAL_REACTIONS,
+    HEADER,
+    PRIMARY_SPECIES,
+    SECONDARY_SPECIES,
+    MINERALS,
+    MINERAL_KINETICS_AND_SORPTION,
+    CHEMISTRY_OUTPUT,
+    SOLVER,
+    FLUID_PROPERTIES,
+    MATERIAL_PROPERTIES,
+    OUTPUT_OPTIONS,
+    MICROBIAL_REACTIONS,
+    GENERAL_REACTIONS,
 )
-
 
 # ═════════════════════════════════════════════════════════════════════
 # Default parameter sets
@@ -38,84 +44,92 @@ from pflotran_templates import (
 DEFAULT_RATE_CONSTANTS = {
     # Reaction rate constants [mol/(L·s)] for MICROBIAL_REACTION
     # [mol/(L·s)] without biomass tracking
-    'fermentation':              6.00e-08,
-    'dom_aerobic':               1.80e-07,   # [1]
-    'fe_abiotic_oxidation':      1.00e-02,   # GENERAL_REACTION [1/(mol·L·s)]
-    'fe_microbial_oxidation':    5.50e-05,
-    'methylotrophic_methano':    9.10e-06,
-    'hydrogenotrophic_methano':  7.20e-09,
-    'acetate_aerobic':           3.00e-07,
-    'hydrogen_oxidation':        1.50e-06,
-    'fe_reduction':              2.25e-10,   # [1] calibrated, see REFERENCES.md
-    'sulfate_reduction':         1.50e-09,
-    'ebullition':                3.00e-08,
-    'acetaclastic_methano':      1.50e-08,
-    'methane_o2_oxidation':      1.50e-08,
-    'methane_no3_oxidation':     1.50e-08,
-    'methane_so4_oxidation':     1.50e-08,
-    'methane_fe_oxidation':      1.50e-08,
+    "fermentation": 6.00e-08,
+    "dom_aerobic": 1.80e-07,  # [1]
+    "fe_abiotic_oxidation": 1.00e-02,  # GENERAL_REACTION [1/(mol·L·s)]
+    "fe_microbial_oxidation": 5.50e-05,
+    "methylotrophic_methano": 9.10e-06,
+    "hydrogenotrophic_methano": 7.20e-09,
+    "acetate_aerobic": 3.00e-07,
+    "hydrogen_oxidation": 1.50e-06,
+    "fe_reduction": 2.25e-10,  # [1] calibrated, see REFERENCES.md
+    "sulfate_reduction": 1.50e-09,
+    "ebullition": 3.00e-08,
+    "acetaclastic_methano": 1.50e-08,
+    "methane_o2_oxidation": 1.50e-08,
+    "methane_no3_oxidation": 1.50e-08,
+    "methane_so4_oxidation": 1.50e-08,
+    "methane_fe_oxidation": 1.50e-08,
 }
 
 DEFAULT_HALF_SATURATION = {
     # Half-saturation constants [mol/L] for Monod kinetics
-    'dom1':     {'fermentation': 5.00e-02, 'aerobic': 1.00e-01},  # [1]
-    'o2':       {'standard': 1.00e-04, 'fe_oxidation': 1.00e-08},
-    'fe_plus2': 1.00e-04,
-    'ch3oh':    1.00e-01,
-    'h2':       1.00e-01,
-    'hco3':     1.00e-01,
-    'acetate':  4.00e-02,
-    'fe_plus3': 1.00e-10,
-    'so4':      1.00e-04,
-    'ch4':      4.00e-02,
-    'no3':      1.00e-04,
+    "dom1": {"fermentation": 5.00e-02, "aerobic": 1.00e-01},  # [1]
+    "o2": {"standard": 1.00e-04, "fe_oxidation": 1.00e-08},
+    "fe_plus2": 1.00e-04,
+    "ch3oh": 1.00e-01,
+    "h2": 1.00e-01,
+    "hco3": 1.00e-01,
+    "acetate": 4.00e-02,
+    "fe_plus3": 1.00e-10,
+    "so4": 1.00e-04,
+    "ch4": 4.00e-02,
+    "no3": 1.00e-04,
 }
 
 DEFAULT_THRESHOLDS = {
     # Threshold concentrations [mol/L] for inhibition switches
-    'general':              1.10e-15,
-    'very_low':             1.10e-16,
-    'o2_inhibition':        1.00e-06,
-    'acetate_inhibition':   8.00e-02,
-    'cl_inhibition':        2.00e-01,   # seawater 1× Cl⁻ = 0.536 M
-    'fe_inhibition':        1.00e-09,
-    'h_plus_inhibition_1':  1.78e-06,
-    'h_plus_inhibition_2':  2.88e-05,
-    'h_plus_inhibition_3':  2.88e-07,
-    'ch4_ebullition':       2.50e-03,
+    "general": 1.10e-15,
+    "very_low": 1.10e-16,
+    "o2_inhibition": 1.00e-06,
+    "acetate_inhibition": 8.00e-02,
+    "cl_inhibition": 2.00e-01,  # seawater 1× Cl⁻ = 0.536 M
+    "fe_inhibition": 1.00e-09,
+    "h_plus_inhibition_1": 1.78e-06,
+    "h_plus_inhibition_2": 2.88e-05,
+    "h_plus_inhibition_3": 2.88e-07,
+    "ch4_ebullition": 2.50e-03,
 }
 
 DEFAULT_INITIAL_CONCENTRATIONS = {
     # PFLOTRAN constraint strings: value + type code
-    'DOM1':    '5.00 T',
-    'H+':     '6.5 P',
-    'O2(aq)': '2.d-4 T',
-    'CO2(aq)':'2.d-4 T',
-    'HCO3-':  '4.00d-6 T',
-    'Fe+++':  '5.3d-5 M Fe(OH)3',
-    'Fe++':   '2.4d-3 T Fe(OH)2',
-    'Mg++':   '9.00d-04 T',
-    'Ca++':   '5.00d-04 T',
-    'Na+':    '2.00d-04 T',
-    'K+':     '2.00d-05 T',
-    'CH3OH':  '2.00d-03 T',
-    'SO4--':  '1.00d-03 T',
-    'Cl-':    '6.00d-04 Z',
+    "DOM1": "5.00 T",
+    "H+": "6.5 P",
+    "O2(aq)": "2.d-4 T",
+    "CO2(aq)": "2.d-4 T",
+    "HCO3-": "4.00d-6 T",
+    "Fe+++": "5.3d-5 M Fe(OH)3",
+    "Fe++": "2.4d-3 T Fe(OH)2",
+    "Mg++": "9.00d-04 T",
+    "Ca++": "5.00d-04 T",
+    "Na+": "2.00d-04 T",
+    "K+": "2.00d-05 T",
+    "CH3OH": "2.00d-03 T",
+    "SO4--": "1.00d-03 T",
+    "Cl-": "6.00d-04 Z",
 }
 
 # Atmospheric boundary condition
 # CO2(aq): ~1.9e-5 M at 8°C, see REFERENCES.md (Henry's law derivation)
 DEFAULT_ATMOSPHERIC_CONCENTRATIONS = {
-    'H+':     '5.0 P',
-    'O2(aq)': '1.00d-04 T',
-    'CO2(aq)':'1.906e-05 T',
-    'HCO3-':  '1.00d-05 T',
+    "H+": "5.0 P",
+    "O2(aq)": "1.00d-04 T",
+    "CO2(aq)": "1.906e-05 T",
+    "HCO3-": "1.00d-05 T",
 }
 
 # Species present but set to trace levels in initial constraint
 TRACE_SPECIES = [
-    'NH4+', 'Tracer', 'Tracer2', 'Tracer3', 'CH4(aq)',
-    'Acetate-', 'H2(aq)', 'HS-', 'NO3-', 'N2(aq)',
+    "NH4+",
+    "Tracer",
+    "Tracer2",
+    "Tracer3",
+    "CH4(aq)",
+    "Acetate-",
+    "H2(aq)",
+    "HS-",
+    "NO3-",
+    "N2(aq)",
 ]
 
 # Grid presets for different dimensionalities
@@ -136,26 +150,26 @@ TRACE_SPECIES = [
 #     3. Possibly multiple MATERIAL_PROPERTY zones (e.g. root zone vs bulk)
 #     4. Region definitions for the lateral boundaries
 GRID_PRESETS = {
-    '1d': {
-        'grid_cells': '1 1 10',
-        'cell_size_x': '1.0d0',
-        'cell_size_y': '1.0d0',
-        'cell_size_z': '0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0',
-        'domain': (1.0, 1.0, 1.0),  # (Lx, Ly, Lz) in meters
+    "1d": {
+        "grid_cells": "1 1 10",
+        "cell_size_x": "1.0d0",
+        "cell_size_y": "1.0d0",
+        "cell_size_z": "0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0",
+        "domain": (1.0, 1.0, 1.0),  # (Lx, Ly, Lz) in meters
     },
-    '2d': {
-        'grid_cells': '10 1 10',
-        'cell_size_x': '0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0',
-        'cell_size_y': '1.0d0',
-        'cell_size_z': '0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0',
-        'domain': (1.0, 1.0, 1.0),
+    "2d": {
+        "grid_cells": "10 1 10",
+        "cell_size_x": "0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0",
+        "cell_size_y": "1.0d0",
+        "cell_size_z": "0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0 0.1d0",
+        "domain": (1.0, 1.0, 1.0),
     },
-    '3d': {
-        'grid_cells': '4 4 4',
-        'cell_size_x': '0.25d0 0.25d0 0.25d0 0.25d0',
-        'cell_size_y': '0.25d0 0.25d0 0.25d0 0.25d0',
-        'cell_size_z': '0.25d0 0.25d0 0.25d0 0.25d0',
-        'domain': (1.0, 1.0, 1.0),
+    "3d": {
+        "grid_cells": "4 4 4",
+        "cell_size_x": "0.25d0 0.25d0 0.25d0 0.25d0",
+        "cell_size_y": "0.25d0 0.25d0 0.25d0 0.25d0",
+        "cell_size_z": "0.25d0 0.25d0 0.25d0 0.25d0",
+        "domain": (1.0, 1.0, 1.0),
     },
 }
 
@@ -163,6 +177,7 @@ GRID_PRESETS = {
 # ═════════════════════════════════════════════════════════════════════
 # Generator class
 # ═════════════════════════════════════════════════════════════════════
+
 
 class PFLOTRANGenerator:
     """Generates PFLOTRAN .in files from configurable parameters.
@@ -191,23 +206,29 @@ class PFLOTRANGenerator:
         # --- Reaction sandbox: water activity inhibition ---
         aw_threshold=0.5,
         aw_rate_constant=1.0e-10,
-        aw_inhibition_type='THRESHOLD',
+        aw_inhibition_type="THRESHOLD",
         # --- Domain geometry ---
-        dimensions='1d',
+        dimensions="1d",
         # --- Simulation control ---
         temperature=8.0,
         final_time_days=31,
         initial_timestep_hours=2.0,
         max_timestep_hours=12.0,
         # --- Paths ---
-        database_path='/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat',
+        database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
         # Merge user overrides with defaults (user wins)
         self.rate_constants = {**DEFAULT_RATE_CONSTANTS, **(rate_constants or {})}
         self.half_saturation = {**DEFAULT_HALF_SATURATION, **(half_saturation or {})}
         self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
-        self.concentrations = {**DEFAULT_INITIAL_CONCENTRATIONS, **(concentrations or {})}
-        self.atmospheric = {**DEFAULT_ATMOSPHERIC_CONCENTRATIONS, **(atmospheric_concentrations or {})}
+        self.concentrations = {
+            **DEFAULT_INITIAL_CONCENTRATIONS,
+            **(concentrations or {}),
+        }
+        self.atmospheric = {
+            **DEFAULT_ATMOSPHERIC_CONCENTRATIONS,
+            **(atmospheric_concentrations or {}),
+        }
 
         # Water activity sandbox parameters
         self.aw_threshold = aw_threshold
@@ -221,11 +242,11 @@ class PFLOTRANGenerator:
         # Domain
         self.dimensions = dimensions.lower()
         grid = GRID_PRESETS[self.dimensions]
-        self.grid_cells = grid['grid_cells']
-        self.cell_size_x = grid['cell_size_x']
-        self.cell_size_y = grid['cell_size_y']
-        self.cell_size_z = grid['cell_size_z']
-        self.domain = grid['domain']
+        self.grid_cells = grid["grid_cells"]
+        self.cell_size_x = grid["cell_size_x"]
+        self.cell_size_y = grid["cell_size_y"]
+        self.cell_size_z = grid["cell_size_z"]
+        self.domain = grid["domain"]
 
         # Simulation control
         self.temperature = temperature
@@ -250,67 +271,79 @@ class PFLOTRANGenerator:
 
     def _build_species_lists(self):
         """PRIMARY_SPECIES, DECOUPLED_EQUILIBRIUM_REACTIONS, SECONDARY_SPECIES, MINERALS"""
-        lines = ['\nPRIMARY_SPECIES']
+        lines = ["\nPRIMARY_SPECIES"]
         for s in PRIMARY_SPECIES:
-            lines.append(f'  {s}')
-        lines.append('/')
+            lines.append(f"  {s}")
+        lines.append("/")
 
-        lines.append('DECOUPLED_EQUILIBRIUM_REACTIONS')
+        lines.append("DECOUPLED_EQUILIBRIUM_REACTIONS")
         for s in PRIMARY_SPECIES:
-            lines.append(f'  {s}')
-        lines.append('/')
+            lines.append(f"  {s}")
+        lines.append("/")
 
-        lines.append('SECONDARY_SPECIES')
+        lines.append("SECONDARY_SPECIES")
         for s in SECONDARY_SPECIES:
-            lines.append(f'  {s}')
-        lines.append('/')
+            lines.append(f"  {s}")
+        lines.append("/")
 
-        lines.append('MINERALS')
+        lines.append("MINERALS")
         for m in MINERALS:
-            lines.append(f'  {m}')
-        lines.append('/')
-        return '\n'.join(lines)
+            lines.append(f"  {m}")
+        lines.append("/")
+        return "\n".join(lines)
 
     def _build_microbial_reaction(self, rxn):
         """Render one MICROBIAL_REACTION block from a reaction dict."""
         lines = [f'  # {rxn["comment"]}']
-        lines.append('  MICROBIAL_REACTION')
+        lines.append("  MICROBIAL_REACTION")
         lines.append(f'    REACTION {rxn["reaction"]}')
-        lines.append(f'    RATE_CONSTANT       {self.rate_constants[rxn["rate_key"]]:.2e}')
+        lines.append(
+            f'    RATE_CONSTANT       {self.rate_constants[rxn["rate_key"]]:.2e}'
+        )
 
-        for m in rxn['monod']:
-            lines.append('    MONOD')
+        for m in rxn["monod"]:
+            lines.append("    MONOD")
             lines.append(f'      SPECIES_NAME        {m["species"]}')
-            lines.append(f'      HALF_SATURATION_CONSTANT {self._get_ks(m["ks_key"]):.2e}')
-            if 'threshold_key' in m:
-                lines.append(f'      THRESHOLD_CONCENTRATION {self.thresholds[m["threshold_key"]]:.2e}')
+            lines.append(
+                f'      HALF_SATURATION_CONSTANT {self._get_ks(m["ks_key"]):.2e}'
+            )
+            if "threshold_key" in m:
+                lines.append(
+                    f'      THRESHOLD_CONCENTRATION {self.thresholds[m["threshold_key"]]:.2e}'
+                )
             else:
-                lines.append(f'      THRESHOLD_CONCENTRATION {m.get("threshold", 0.0):.2e}')
-            lines.append('    /')
+                lines.append(
+                    f'      THRESHOLD_CONCENTRATION {m.get("threshold", 0.0):.2e}'
+                )
+            lines.append("    /")
 
-        for inh in rxn['inhibition']:
+        for inh in rxn["inhibition"]:
             # Skip Cl⁻ inhibition if disabled (for double-counting diagnostic)
-            if inh['species'] == 'Cl-' and not self.enable_cl_inhibition:
+            if inh["species"] == "Cl-" and not self.enable_cl_inhibition:
                 continue
-            lines.append('    INHIBITION')
+            lines.append("    INHIBITION")
             lines.append(f'      SPECIES_NAME        {inh["species"]}')
-            lines.append('      TYPE MONOD')
-            lines.append(f'      THRESHOLD_CONCENTRATION {self.thresholds[inh["threshold_key"]]:.2e}')
+            lines.append("      TYPE MONOD")
+            lines.append(
+                f'      THRESHOLD_CONCENTRATION {self.thresholds[inh["threshold_key"]]:.2e}'
+            )
             lines.append(f'      INHIBIT_{inh["direction"]}_THRESHOLD')
-            lines.append('    /')
+            lines.append("    /")
 
-        lines.append('  /')
-        return '\n'.join(lines)
+        lines.append("  /")
+        return "\n".join(lines)
 
     def _build_general_reaction(self, rxn):
         """Render one GENERAL_REACTION block."""
         lines = [f'  # {rxn["comment"]}']
-        lines.append('  GENERAL_REACTION')
+        lines.append("  GENERAL_REACTION")
         lines.append(f'    REACTION {rxn["reaction"]}')
-        lines.append(f'    FORWARD_RATE        {self.rate_constants[rxn["rate_key"]]:.2e}')
+        lines.append(
+            f'    FORWARD_RATE        {self.rate_constants[rxn["rate_key"]]:.2e}'
+        )
         lines.append(f'    BACKWARD_RATE       {rxn["backward_rate"]:.2e}')
-        lines.append('  /')
-        return '\n'.join(lines)
+        lines.append("  /")
+        return "\n".join(lines)
 
     def _build_all_reactions(self):
         """All MICROBIAL + GENERAL reactions."""
@@ -319,7 +352,7 @@ class PFLOTRANGenerator:
             blocks.append(self._build_microbial_reaction(rxn))
         for rxn in GENERAL_REACTIONS:
             blocks.append(self._build_general_reaction(rxn))
-        return '\n\n'.join(blocks)
+        return "\n\n".join(blocks)
 
     def _build_reaction_sandbox(self):
         """REACTION_SANDBOX block for water activity inhibition.
@@ -334,69 +367,73 @@ class PFLOTRANGenerator:
           RATE_CONSTANT — base rate [mol/(m³·s)] for the sandbox reaction
           INHIBITION_TYPE — THRESHOLD (binary) or SMOOTHSTEP (gradual)
         """
-        sandbox_names = ['AWINHIBIT', 'AWINHIBITACETATE', 'AWINHIBITMETHYL']
-        lines = ['\nREACTION_SANDBOX']
+        sandbox_names = ["AWINHIBIT", "AWINHIBITACETATE", "AWINHIBITMETHYL"]
+        lines = ["\nREACTION_SANDBOX"]
         for name in sandbox_names:
-            lines.append(f'  {name}')
-            lines.append(f'    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.1e}')
-            lines.append(f'    RATE_CONSTANT {self.aw_rate_constant:.1e}')
-            lines.append(f'    INHIBITION_TYPE {self.aw_inhibition_type}')
-            lines.append('  /')
-        lines.append('/')
-        return '\n'.join(lines)
+            lines.append(f"  {name}")
+            lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.1e}")
+            lines.append(f"    RATE_CONSTANT {self.aw_rate_constant:.1e}")
+            lines.append(f"    INHIBITION_TYPE {self.aw_inhibition_type}")
+            lines.append("  /")
+        lines.append("/")
+        return "\n".join(lines)
 
     def _build_constraints(self):
         """Transport constraints: initial conditions + atmospheric boundary."""
         # Initial constraint
         lines = [
-            '\n#=========================== transport constraints ============================',
-            'CONSTRAINT initial',
-            '  IMMOBILE',
-            '    cellulose            8.00e+03',
-            '    HRimm                1.00d-20',
-            '  /',
-            '  CONCENTRATIONS',
+            "\n#=========================== transport constraints ============================",
+            "CONSTRAINT initial",
+            "  IMMOBILE",
+            "    cellulose            8.00e+03",
+            "    HRimm                1.00d-20",
+            "  /",
+            "  CONCENTRATIONS",
         ]
 
         # Parameterized species from self.concentrations
         for species in PRIMARY_SPECIES:
             if species in self.concentrations:
-                lines.append(f'    {species:20s}{self.concentrations[species]}')
+                lines.append(f"    {species:20s}{self.concentrations[species]}")
             elif species in TRACE_SPECIES:
-                lines.append(f'    {species:20s}1.00d-15 T')
-            elif species == 'H2O':
+                lines.append(f"    {species:20s}1.00d-15 T")
+            elif species == "H2O":
                 lines.append(f'    {"H2O":20s}1.00d-03 T')
 
-        lines.extend([
-            '  /',
-            '  MINERALS',
-            '    Fe(OH)3             9.6d-6  1.d2 m^2/m^3',
-            '    Fe(OH)2             7.2d-1  1.d2 m^2/m^3',
-            '    Rock(s)             0.5  5.0e3 m^2/m^3',
-            '    MgCl2.H2O           1.0d-02  1.0e2 m^2/m^3',
-            '  /',
-            'END',
-        ])
+        lines.extend(
+            [
+                "  /",
+                "  MINERALS",
+                "    Fe(OH)3             9.6d-6  1.d2 m^2/m^3",
+                "    Fe(OH)2             7.2d-1  1.d2 m^2/m^3",
+                "    Rock(s)             0.5  5.0e3 m^2/m^3",
+                "    MgCl2.H2O           1.0d-02  1.0e2 m^2/m^3",
+                "  /",
+                "END",
+            ]
+        )
 
         # Atmospheric constraint — only the species that differ from initial
-        lines.extend([
-            '',
-            'CONSTRAINT atmospheric',
-            '  CONCENTRATIONS',
-        ])
+        lines.extend(
+            [
+                "",
+                "CONSTRAINT atmospheric",
+                "  CONCENTRATIONS",
+            ]
+        )
         # Use atmospheric overrides; fill rest from initial or trace
         for species in PRIMARY_SPECIES:
             if species in self.atmospheric:
-                lines.append(f'    {species:20s}{self.atmospheric[species]}')
+                lines.append(f"    {species:20s}{self.atmospheric[species]}")
             elif species in self.concentrations:
-                lines.append(f'    {species:20s}{self.concentrations[species]}')
+                lines.append(f"    {species:20s}{self.concentrations[species]}")
             elif species in TRACE_SPECIES:
-                lines.append(f'    {species:20s}1.00d-15 T')
-            elif species == 'H2O':
+                lines.append(f"    {species:20s}1.00d-15 T")
+            elif species == "H2O":
                 lines.append(f'    {"H2O":20s}1.00d-03 T')
-        lines.extend(['  /', 'END'])
+        lines.extend(["  /", "END"])
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _build_grid_and_time(self):
         """Discretization and time stepping."""
@@ -451,7 +488,7 @@ REGION bottom_surface
 END
 
 REGION center_obs
-  COORDINATE {lx/2:.1f}d0 {ly/2:.1f}d0 {lz/2:.1f}d0
+  COORDINATE {lx/2:.1f}d0 {ly/2:.1f}d0 {lz/2:.1f}d0 # noqa: E226
 END
 
 #=========================== observation points ===============================
@@ -521,18 +558,18 @@ END_SUBSURFACE"""
     # Main assembly
     # ─────────────────────────────────────────────────────────────────
 
-    def generate(self, filename='pflotran_input.in'):
+    def generate(self, filename="pflotran_input.in"):
         """Assemble and write the complete PFLOTRAN input file.
 
         Sections are built from templates (static text) and parameters
         (self.*). No inline PFLOTRAN strings in this method.
         """
         sections = [
-            HEADER.format(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+            HEADER.format(timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             self._build_species_lists(),
             MINERAL_KINETICS_AND_SORPTION,
             self._build_all_reactions(),
-            self._build_reaction_sandbox() if self.enable_aw_sandbox else '',
+            self._build_reaction_sandbox() if self.enable_aw_sandbox else "",
             CHEMISTRY_OUTPUT.format(database_path=self.database_path),
             self._build_constraints(),
             SOLVER,
@@ -543,9 +580,9 @@ END_SUBSURFACE"""
             self._build_regions_and_conditions(),
         ]
 
-        content = '\n\n'.join(sections)
+        content = "\n\n".join(sections)
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write(content)
 
         print(f"Generated PFLOTRAN input file: {filename}")
@@ -562,10 +599,11 @@ END_SUBSURFACE"""
 # CLI entry point
 # ═════════════════════════════════════════════════════════════════════
 
+
 def main():
     generator = PFLOTRANGenerator()
     generator.generate()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

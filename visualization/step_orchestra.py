@@ -16,25 +16,25 @@ import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import step1_extract
-import step2_plot
-import step3_flux
-import step4_plotflux
+import step1_extract  # noqa: E402
+import step2_plot  # noqa: E402
+import step3_flux  # noqa: E402
+import step4_plotflux  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────
 # Configuration — edit these as needed
 # ─────────────────────────────────────────────────────────────────
 
 # Data source
-DATA_FORMAT = 'tec'         # 'tec' or 'hdf5'
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sample_data')
-FILE_TEMPLATE = 'test29-{:03d}.tec'
+DATA_FORMAT = "tec"  # 'tec' or 'hdf5'
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sample_data")
+FILE_TEMPLATE = "test29-{:03d}.tec"
 N_FILES = 6
 
 # Species to compute gradients/flux for
 SPECIES_MAP = {
-    'CO2': 'CO2(aq) [M]',
-    'CH4': 'Free CH4(aq) [M]',
+    "CO2": "CO2(aq) [M]",
+    "CH4": "Free CH4(aq) [M]",
 }
 
 # Simulation temperature for Stokes-Einstein diffusion correction
@@ -45,10 +45,10 @@ TEMPERATURE_C = 8.0
 N_TIMESTEPS_2D = 5
 
 # Output directories
-OUTPUT_DIR_STEP3 = 'experiments/figures/pflotran_flux_imgs'
-OUTPUT_DIR_STEP4 = 'experiments/figures/pflotran_flux_imgs'
-OUTPUT_FILE_STEP3 = 'co2_ch4_surface_visualization.html'
-OUTPUT_FILE_STEP4 = 'gradient_time_series.html'
+OUTPUT_DIR_STEP3 = "experiments/figures/pflotran_flux_imgs"
+OUTPUT_DIR_STEP4 = "experiments/figures/pflotran_flux_imgs"
+OUTPUT_FILE_STEP3 = "co2_ch4_surface_visualization.html"
+OUTPUT_FILE_STEP4 = "gradient_time_series.html"
 
 
 def main():
@@ -82,6 +82,5 @@ def main():
     print("\nPipeline complete — open the HTML files to view results.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

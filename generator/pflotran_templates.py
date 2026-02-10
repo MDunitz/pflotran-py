@@ -68,18 +68,47 @@ OUTPUT
 # ─────────────────────────────────────────────────────────────────────
 
 PRIMARY_SPECIES = [
-    'DOM1', 'H+', 'O2(aq)', 'HCO3-', 'Fe+++', 'Fe++', 'NH4+',
-    'Tracer', 'Tracer2', 'Tracer3', 'CH4(aq)', 'Acetate-', 'H2(aq)',
-    'Mg++', 'Ca++', 'Na+', 'K+', 'CH3OH', 'SO4--', 'HS-', 'H2O',
-    'Cl-', 'CO2(aq)', 'NO3-', 'N2(aq)',
+    "DOM1",
+    "H+",
+    "O2(aq)",
+    "HCO3-",
+    "Fe+++",
+    "Fe++",
+    "NH4+",
+    "Tracer",
+    "Tracer2",
+    "Tracer3",
+    "CH4(aq)",
+    "Acetate-",
+    "H2(aq)",
+    "Mg++",
+    "Ca++",
+    "Na+",
+    "K+",
+    "CH3OH",
+    "SO4--",
+    "HS-",
+    "H2O",
+    "Cl-",
+    "CO2(aq)",
+    "NO3-",
+    "N2(aq)",
 ]
 
 SECONDARY_SPECIES = [
-    'OH-', 'FeCO3+', 'Fe(OH)4-', 'Acetic_acid(aq)', 'FeCH3COO+',
-    'Fe(OH)2(aq)', 'FeCO3(aq)', 'CO3--', 'CaHCO3+', 'MgCl+',
+    "OH-",
+    "FeCO3+",
+    "Fe(OH)4-",
+    "Acetic_acid(aq)",
+    "FeCH3COO+",
+    "Fe(OH)2(aq)",
+    "FeCO3(aq)",
+    "CO3--",
+    "CaHCO3+",
+    "MgCl+",
 ]
 
-MINERALS = ['Fe(OH)3', 'Fe(OH)2', 'Rock(s)', 'MgCl2.H2O']
+MINERALS = ["Fe(OH)3", "Fe(OH)2", "Rock(s)", "MgCl2.H2O"]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -270,181 +299,265 @@ OUTPUT
 
 MICROBIAL_REACTIONS = [
     {
-        'comment': 'fermentation',
-        'reaction': '1.00e+00 DOM1 + 6.67e-01 H2O -> 3.33e-01 Acetate- + 3.33e-01 HCO3- + 6.67e-01 H+ + 6.67e-01 H2(aq) + 3.33e-01 Tracer',
-        'rate_key': 'fermentation',
-        'monod': [
-            {'species': 'DOM1', 'ks_key': ('dom1', 'fermentation'), 'threshold_key': 'general'},
+        "comment": "fermentation",
+        "reaction": "1.00e+00 DOM1 + 6.67e-01 H2O -> 3.33e-01 Acetate- + 3.33e-01 HCO3- + 6.67e-01 H+ + 6.67e-01 H2(aq) + 3.33e-01 Tracer",
+        "rate_key": "fermentation",
+        "monod": [
+            {
+                "species": "DOM1",
+                "ks_key": ("dom1", "fermentation"),
+                "threshold_key": "general",
+            },
         ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Acetate-', 'threshold_key': 'acetate_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Cl-', 'threshold_key': 'cl_inhibition', 'direction': 'ABOVE'},
-        ],
-    },
-    {
-        'comment': 'DOM aerobic respiration',
-        'reaction': '1.00e+00 DOM1 + 1.00e+00 O2(aq) + 1.00e+00 H2O -> 1.00e+00 HCO3- + 1.00e+00 H+ + 1.00e+00 Tracer',
-        'rate_key': 'dom_aerobic',
-        'monod': [
-            {'species': 'O2(aq)', 'ks_key': ('o2', 'standard'), 'threshold': 0.0},
-            {'species': 'DOM1', 'ks_key': ('dom1', 'aerobic'), 'threshold_key': 'very_low'},
-        ],
-        'inhibition': [],
-    },
-    {
-        'comment': 'Fe(II) microbial oxidation',
-        'reaction': '1.00e+00 Fe++ + 2.50e-01 O2(aq) + 1.00e+00 H+ -> 1.00e+00 Fe+++ + 5.00e-01 H2O',
-        'rate_key': 'fe_microbial_oxidation',
-        'monod': [
-            {'species': 'O2(aq)', 'ks_key': ('o2', 'fe_oxidation'), 'threshold': 0.0},
-            {'species': 'Fe++', 'ks_key': 'fe_plus2', 'threshold_key': 'general'},
-        ],
-        'inhibition': [],
-    },
-    {
-        'comment': 'methylotrophic methanogenesis',
-        'reaction': '1.00e+00 CH3OH + 1.00e+00 H2(aq) -> 1.00e+00 CH4(aq) + 1.00e+00 H2O',
-        'rate_key': 'methylotrophic_methano',
-        'monod': [
-            {'species': 'CH3OH', 'ks_key': 'ch3oh', 'threshold_key': 'general'},
-            {'species': 'H2(aq)', 'ks_key': 'h2', 'threshold_key': 'general'},
-        ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Cl-', 'threshold_key': 'cl_inhibition', 'direction': 'ABOVE'},
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "Acetate-",
+                "threshold_key": "acetate_inhibition",
+                "direction": "ABOVE",
+            },
+            {"species": "Cl-", "threshold_key": "cl_inhibition", "direction": "ABOVE"},
         ],
     },
     {
-        'comment': 'acetate aerobic respiration',
-        'reaction': '1.00e+00 Acetate- + 2.00e+00 O2(aq) -> 2.00e+00 HCO3- + 2.00e+00 H+ + 2.00e+00 Tracer',
-        'rate_key': 'acetate_aerobic',
-        'monod': [
-            {'species': 'Acetate-', 'ks_key': 'acetate', 'threshold': 0.0},
-            {'species': 'O2(aq)', 'ks_key': ('o2', 'standard'), 'threshold_key': 'very_low'},
+        "comment": "DOM aerobic respiration",
+        "reaction": "1.00e+00 DOM1 + 1.00e+00 O2(aq) + 1.00e+00 H2O -> 1.00e+00 HCO3- + 1.00e+00 H+ + 1.00e+00 Tracer",
+        "rate_key": "dom_aerobic",
+        "monod": [
+            {"species": "O2(aq)", "ks_key": ("o2", "standard"), "threshold": 0.0},
+            {
+                "species": "DOM1",
+                "ks_key": ("dom1", "aerobic"),
+                "threshold_key": "very_low",
+            },
         ],
-        'inhibition': [],
+        "inhibition": [],
     },
     {
-        'comment': 'hydrogen oxidation',
-        'reaction': '2.00e+00 H2(aq) + 1.00e+00 O2(aq) -> 2.00e+00 H2O',
-        'rate_key': 'hydrogen_oxidation',
-        'monod': [
-            {'species': 'H2(aq)', 'ks_key': 'h2', 'threshold_key': 'general'},
-            {'species': 'O2(aq)', 'ks_key': ('o2', 'standard'), 'threshold': 0.0},
+        "comment": "Fe(II) microbial oxidation",
+        "reaction": "1.00e+00 Fe++ + 2.50e-01 O2(aq) + 1.00e+00 H+ -> 1.00e+00 Fe+++ + 5.00e-01 H2O",
+        "rate_key": "fe_microbial_oxidation",
+        "monod": [
+            {"species": "O2(aq)", "ks_key": ("o2", "fe_oxidation"), "threshold": 0.0},
+            {"species": "Fe++", "ks_key": "fe_plus2", "threshold_key": "general"},
         ],
-        'inhibition': [],
+        "inhibition": [],
     },
     {
-        'comment': 'Fe(III) reduction',
-        'reaction': '1.00e+00 Acetate- + 8.00e+00 Fe+++ + 4.00e+00 H2O -> 2.00e+00 HCO3- + 8.00e+00 Fe++ + 9.00e+00 H+ + 2.00e+00 Tracer',
-        'rate_key': 'fe_reduction',
-        'monod': [
-            {'species': 'Acetate-', 'ks_key': 'acetate', 'threshold_key': 'general'},
-            {'species': 'Fe+++', 'ks_key': 'fe_plus3', 'threshold_key': 'general'},
+        "comment": "methylotrophic methanogenesis",
+        "reaction": "1.00e+00 CH3OH + 1.00e+00 H2(aq) -> 1.00e+00 CH4(aq) + 1.00e+00 H2O",
+        "rate_key": "methylotrophic_methano",
+        "monod": [
+            {"species": "CH3OH", "ks_key": "ch3oh", "threshold_key": "general"},
+            {"species": "H2(aq)", "ks_key": "h2", "threshold_key": "general"},
         ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-        ],
-    },
-    {
-        'comment': 'sulfate reduction',
-        'reaction': '1.00e+00 Acetate- + 1.00e+00 SO4-- + 1.00e+00 H+ -> 2.00e+00 HCO3- + 1.00e+00 HS- + 1.00e+00 Tracer',
-        'rate_key': 'sulfate_reduction',
-        'monod': [
-            {'species': 'Acetate-', 'ks_key': 'acetate', 'threshold_key': 'general'},
-            {'species': 'SO4--', 'ks_key': 'so4', 'threshold_key': 'general'},
-        ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Fe+++', 'threshold_key': 'fe_inhibition', 'direction': 'ABOVE'},
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+            {"species": "Cl-", "threshold_key": "cl_inhibition", "direction": "ABOVE"},
         ],
     },
     {
-        'comment': 'ebullition (CH4 degassing proxy)',
-        'reaction': '1.00e+00 CH4(aq) -> 1.00e+00 Tracer2',
-        'rate_key': 'ebullition',
-        'monod': [
-            {'species': 'CH4(aq)', 'ks_key': 'ch4', 'threshold_key': 'general'},
+        "comment": "acetate aerobic respiration",
+        "reaction": "1.00e+00 Acetate- + 2.00e+00 O2(aq) -> 2.00e+00 HCO3- + 2.00e+00 H+ + 2.00e+00 Tracer",
+        "rate_key": "acetate_aerobic",
+        "monod": [
+            {"species": "Acetate-", "ks_key": "acetate", "threshold": 0.0},
+            {
+                "species": "O2(aq)",
+                "ks_key": ("o2", "standard"),
+                "threshold_key": "very_low",
+            },
         ],
-        'inhibition': [
-            {'species': 'CH4(aq)', 'threshold_key': 'ch4_ebullition', 'direction': 'BELOW'},
+        "inhibition": [],
+    },
+    {
+        "comment": "hydrogen oxidation",
+        "reaction": "2.00e+00 H2(aq) + 1.00e+00 O2(aq) -> 2.00e+00 H2O",
+        "rate_key": "hydrogen_oxidation",
+        "monod": [
+            {"species": "H2(aq)", "ks_key": "h2", "threshold_key": "general"},
+            {"species": "O2(aq)", "ks_key": ("o2", "standard"), "threshold": 0.0},
+        ],
+        "inhibition": [],
+    },
+    {
+        "comment": "Fe(III) reduction",
+        "reaction": "1.00e+00 Acetate- + 8.00e+00 Fe+++ + 4.00e+00 H2O -> 2.00e+00 HCO3- + 8.00e+00 Fe++ + 9.00e+00 H+ + 2.00e+00 Tracer",
+        "rate_key": "fe_reduction",
+        "monod": [
+            {"species": "Acetate-", "ks_key": "acetate", "threshold_key": "general"},
+            {"species": "Fe+++", "ks_key": "fe_plus3", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
         ],
     },
     {
-        'comment': 'methane oxidation (O2)',
-        'reaction': '1.00e+00 CH4(aq) + 2.00e+00 O2(aq) -> 1.00e+00 HCO3- + 1.00e+00 H+ + 1.00e+00 H2O + 1.00e+00 Tracer',
-        'rate_key': 'methane_o2_oxidation',
-        'monod': [
-            {'species': 'O2(aq)', 'ks_key': ('o2', 'standard'), 'threshold_key': 'general'},
-            {'species': 'CH4(aq)', 'ks_key': 'ch4', 'threshold_key': 'general'},
+        "comment": "sulfate reduction",
+        "reaction": "1.00e+00 Acetate- + 1.00e+00 SO4-- + 1.00e+00 H+ -> 2.00e+00 HCO3- + 1.00e+00 HS- + 1.00e+00 Tracer",
+        "rate_key": "sulfate_reduction",
+        "monod": [
+            {"species": "Acetate-", "ks_key": "acetate", "threshold_key": "general"},
+            {"species": "SO4--", "ks_key": "so4", "threshold_key": "general"},
         ],
-        'inhibition': [],
-    },
-    {
-        'comment': 'methane oxidation (NO3)',
-        'reaction': '5.00e+00 CH4(aq) + 8.00e+00 NO3- + 3.00e+00 H+ -> 5.00e+00 HCO3- + 4.00e+00 N2(aq) + 9.00e+00 H2O + 1.00e+00 Tracer',
-        'rate_key': 'methane_no3_oxidation',
-        'monod': [
-            {'species': 'NO3-', 'ks_key': 'no3', 'threshold_key': 'general'},
-            {'species': 'CH4(aq)', 'ks_key': 'ch4', 'threshold_key': 'general'},
-        ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-        ],
-    },
-    {
-        'comment': 'methane oxidation (SO4)',
-        'reaction': '1.00e+00 CH4(aq) + 1.00e+00 SO4-- -> 1.00e+00 HCO3- + 1.00e+00 HS- + 1.00e+00 H2O + 1.00e+00 Tracer',
-        'rate_key': 'methane_so4_oxidation',
-        'monod': [
-            {'species': 'SO4--', 'ks_key': 'so4', 'threshold_key': 'general'},
-            {'species': 'CH4(aq)', 'ks_key': 'ch4', 'threshold_key': 'general'},
-        ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "Fe+++",
+                "threshold_key": "fe_inhibition",
+                "direction": "ABOVE",
+            },
         ],
     },
     {
-        'comment': 'methane oxidation (Fe)',
-        'reaction': '1.00e+00 CH4(aq) + 8.00e+00 Fe+++ + 3.00e+00 H2O -> 1.00e+00 HCO3- + 8.00e+00 Fe++ + 9.00e+00 H+ + 1.00e+00 Tracer',
-        'rate_key': 'methane_fe_oxidation',
-        'monod': [
-            {'species': 'Fe+++', 'ks_key': 'fe_plus3', 'threshold_key': 'general'},
-            {'species': 'CH4(aq)', 'ks_key': 'ch4', 'threshold_key': 'general'},
+        "comment": "ebullition (CH4 degassing proxy)",
+        "reaction": "1.00e+00 CH4(aq) -> 1.00e+00 Tracer2",
+        "rate_key": "ebullition",
+        "monod": [
+            {"species": "CH4(aq)", "ks_key": "ch4", "threshold_key": "general"},
         ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-        ],
-    },
-    {
-        'comment': 'hydrogenotrophic methanogenesis',
-        'reaction': '4.00e+00 H2(aq) + 1.00e+00 HCO3- + 1.00e+00 H+ -> 1.00e+00 CH4(aq) + 3.00e+00 H2O',
-        'rate_key': 'hydrogenotrophic_methano',
-        'monod': [
-            {'species': 'H2(aq)', 'ks_key': 'h2', 'threshold_key': 'general'},
-            {'species': 'HCO3-', 'ks_key': 'hco3', 'threshold_key': 'general'},
-        ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Fe+++', 'threshold_key': 'fe_inhibition', 'direction': 'ABOVE'},
-            {'species': 'H+', 'threshold_key': 'h_plus_inhibition_1', 'direction': 'ABOVE'},
-            {'species': 'Cl-', 'threshold_key': 'cl_inhibition', 'direction': 'ABOVE'},
+        "inhibition": [
+            {
+                "species": "CH4(aq)",
+                "threshold_key": "ch4_ebullition",
+                "direction": "BELOW",
+            },
         ],
     },
     {
-        'comment': 'acetoclastic methanogenesis',
-        'reaction': '1.00e+00 Acetate- + 1.00e+00 H2O -> 1.00e+00 CH4(aq) + 1.00e+00 HCO3- + 1.00e+00 Tracer',
-        'rate_key': 'acetaclastic_methano',
-        'monod': [
-            {'species': 'Acetate-', 'ks_key': 'acetate', 'threshold_key': 'general'},
+        "comment": "methane oxidation (O2)",
+        "reaction": "1.00e+00 CH4(aq) + 2.00e+00 O2(aq) -> 1.00e+00 HCO3- + 1.00e+00 H+ + 1.00e+00 H2O + 1.00e+00 Tracer",
+        "rate_key": "methane_o2_oxidation",
+        "monod": [
+            {
+                "species": "O2(aq)",
+                "ks_key": ("o2", "standard"),
+                "threshold_key": "general",
+            },
+            {"species": "CH4(aq)", "ks_key": "ch4", "threshold_key": "general"},
         ],
-        'inhibition': [
-            {'species': 'O2(aq)', 'threshold_key': 'o2_inhibition', 'direction': 'ABOVE'},
-            {'species': 'Fe+++', 'threshold_key': 'fe_inhibition', 'direction': 'ABOVE'},
-            {'species': 'H+', 'threshold_key': 'h_plus_inhibition_2', 'direction': 'ABOVE'},
-            {'species': 'H+', 'threshold_key': 'h_plus_inhibition_3', 'direction': 'BELOW'},
-            {'species': 'Cl-', 'threshold_key': 'cl_inhibition', 'direction': 'ABOVE'},
+        "inhibition": [],
+    },
+    {
+        "comment": "methane oxidation (NO3)",
+        "reaction": "5.00e+00 CH4(aq) + 8.00e+00 NO3- + 3.00e+00 H+ -> 5.00e+00 HCO3- + 4.00e+00 N2(aq) + 9.00e+00 H2O + 1.00e+00 Tracer",
+        "rate_key": "methane_no3_oxidation",
+        "monod": [
+            {"species": "NO3-", "ks_key": "no3", "threshold_key": "general"},
+            {"species": "CH4(aq)", "ks_key": "ch4", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+        ],
+    },
+    {
+        "comment": "methane oxidation (SO4)",
+        "reaction": "1.00e+00 CH4(aq) + 1.00e+00 SO4-- -> 1.00e+00 HCO3- + 1.00e+00 HS- + 1.00e+00 H2O + 1.00e+00 Tracer",
+        "rate_key": "methane_so4_oxidation",
+        "monod": [
+            {"species": "SO4--", "ks_key": "so4", "threshold_key": "general"},
+            {"species": "CH4(aq)", "ks_key": "ch4", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+        ],
+    },
+    {
+        "comment": "methane oxidation (Fe)",
+        "reaction": "1.00e+00 CH4(aq) + 8.00e+00 Fe+++ + 3.00e+00 H2O -> 1.00e+00 HCO3- + 8.00e+00 Fe++ + 9.00e+00 H+ + 1.00e+00 Tracer",
+        "rate_key": "methane_fe_oxidation",
+        "monod": [
+            {"species": "Fe+++", "ks_key": "fe_plus3", "threshold_key": "general"},
+            {"species": "CH4(aq)", "ks_key": "ch4", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+        ],
+    },
+    {
+        "comment": "hydrogenotrophic methanogenesis",
+        "reaction": "4.00e+00 H2(aq) + 1.00e+00 HCO3- + 1.00e+00 H+ -> 1.00e+00 CH4(aq) + 3.00e+00 H2O",
+        "rate_key": "hydrogenotrophic_methano",
+        "monod": [
+            {"species": "H2(aq)", "ks_key": "h2", "threshold_key": "general"},
+            {"species": "HCO3-", "ks_key": "hco3", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "Fe+++",
+                "threshold_key": "fe_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "H+",
+                "threshold_key": "h_plus_inhibition_1",
+                "direction": "ABOVE",
+            },
+            {"species": "Cl-", "threshold_key": "cl_inhibition", "direction": "ABOVE"},
+        ],
+    },
+    {
+        "comment": "acetoclastic methanogenesis",
+        "reaction": "1.00e+00 Acetate- + 1.00e+00 H2O -> 1.00e+00 CH4(aq) + 1.00e+00 HCO3- + 1.00e+00 Tracer",
+        "rate_key": "acetaclastic_methano",
+        "monod": [
+            {"species": "Acetate-", "ks_key": "acetate", "threshold_key": "general"},
+        ],
+        "inhibition": [
+            {
+                "species": "O2(aq)",
+                "threshold_key": "o2_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "Fe+++",
+                "threshold_key": "fe_inhibition",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "H+",
+                "threshold_key": "h_plus_inhibition_2",
+                "direction": "ABOVE",
+            },
+            {
+                "species": "H+",
+                "threshold_key": "h_plus_inhibition_3",
+                "direction": "BELOW",
+            },
+            {"species": "Cl-", "threshold_key": "cl_inhibition", "direction": "ABOVE"},
         ],
     },
 ]
@@ -452,9 +565,9 @@ MICROBIAL_REACTIONS = [
 # Fe(II) abiotic oxidation is a GENERAL_REACTION, not MICROBIAL
 GENERAL_REACTIONS = [
     {
-        'comment': 'Fe(II) abiotic oxidation',
-        'reaction': '1.00e+00 Fe++ + 2.50e-01 O2(aq) + 1.00e+00 H+ <-> 1.00e+00 Fe+++ + 5.00e-01 H2O + 1.00e+00 Tracer3',
-        'rate_key': 'fe_abiotic_oxidation',
-        'backward_rate': 0.0,
+        "comment": "Fe(II) abiotic oxidation",
+        "reaction": "1.00e+00 Fe++ + 2.50e-01 O2(aq) + 1.00e+00 H+ <-> 1.00e+00 Fe+++ + 5.00e-01 H2O + 1.00e+00 Tracer3",
+        "rate_key": "fe_abiotic_oxidation",
+        "backward_rate": 0.0,
     },
 ]
