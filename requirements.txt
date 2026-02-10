@@ -1,0 +1,11 @@
+# PFLOTRAN pipeline dependencies
+# Visualization
+bokeh
+plotly
+matplotlib
+
+# Data processing
+pandas
+numpy
+scipy
+tqdm

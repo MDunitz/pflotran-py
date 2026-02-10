@@ -8,7 +8,7 @@ Runs steps 1–4 in sequence:
     4. Time series gradient/flux at a single point (Bokeh)
 
 For multi-condition comparisons (varying water activity),
-see software_module/pflotran_vis_compare/
+see ../compare/comparing_aw.ipynb
 """
 
 import sys
@@ -27,7 +27,7 @@ import step4_plotflux
 
 # Data source
 DATA_FORMAT = 'tec'         # 'tec' or 'hdf5'
-DATA_DIR = '.'
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sample_data')
 FILE_TEMPLATE = 'test29-{:03d}.tec'
 N_FILES = 6
 
@@ -84,3 +84,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
