@@ -1,0 +1,7 @@
+pandas
+numpy
+matplotlib
+tqdm
+plotly
+bokeh
+scipy

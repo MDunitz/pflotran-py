@@ -1,0 +1,1038 @@
+# Description: Simple microbial decomposition and dissolution to DOM network
+# Rate constants estimated to show different processes
+
+SIMULATION
+  SIMULATION_TYPE SUBSURFACE
+  PROCESS_MODELS
+    SUBSURFACE_FLOW flow
+      MODE GENERAL
+      OPTIONS
+        ARITHMETIC_GAS_DIFFUSIVE_DENSITY
+        ISOTHERMAL
+        REPLACE_INIT_PARAMS_ON_RESTART
+      /
+    /    
+    SUBSURFACE_TRANSPORT
+      MODE GIRT
+    /
+  /
+
+END
+
+
+SUBSURFACE
+
+#=========================== useful transport parameters =======================
+
+REFERENCE_LIQUID_DENSITY 1.d3
+
+#=========================== chemistry ========================================
+CHEMISTRY
+ACTIVITY_WATER
+ACTIVITY_COEFFICIENTS TIMESTEP
+OUTPUT
+  WATER_ACTIVITY_COEFFICIENT
+/
+PRIMARY_SPECIES
+  DOM1
+  H+
+  O2(aq)
+  HCO3-
+  Fe+++
+  Fe++
+  NH4+
+  Tracer
+  Tracer2
+  Tracer3
+  CH4(aq)
+  Acetate-
+  H2(aq)
+  Mg++
+  Ca++
+  Na+
+  K+
+  CH3OH
+  SO4--
+  HS-
+  H2O
+  Cl-
+  CO2(aq)
+/
+DECOUPLED_EQUILIBRIUM_REACTIONS
+  DOM1
+  H+
+  O2(aq)
+  HCO3-
+  Fe+++
+  Fe++
+  NH4+
+  Tracer
+  Tracer2
+  Tracer3
+  CH4(aq)
+  Acetate-
+  H2(aq)
+  Mg++
+  Ca++
+  Na+
+  K+
+  CH3OH
+  SO4--
+  HS-
+  H2O
+  Cl-
+  CO2(aq)
+/
+SECONDARY_SPECIES 
+  OH-
+  FeCO3+
+  Fe(OH)4-
+  Acetic_acid(aq)
+  FeCH3COO+
+  # FeIIIDOM1(aq)
+  # FeIIDOM1(aq)
+  # FeIIIAcetate(aq)
+  Fe(OH)2(aq)
+  FeCO3(aq)
+  CO3--
+  CaHCO3+
+  MgCl+
+/
+MINERALS
+  Fe(OH)3
+  Fe(OH)2
+  Rock(s)
+  MgCl2.H2O
+/
+MINERAL_KINETICS
+  Fe(OH)3
+    RATE_CONSTANT  1.d-6 mol/m^2-sec
+  /
+  Fe(OH)2
+    RATE_CONSTANT  1.d-7 mol/m^2-sec
+  /
+  Rock(s)
+    RATE_CONSTANT  0.0 mol/m^2-sec
+  /
+  MgCl2.H2O
+    RATE_CONSTANT  1.d-6 mol/m^2-sec  # Reduced rate for numerical stability
+  /
+/
+IMMOBILE_SPECIES
+  cellulose
+  HRimm
+/
+PASSIVE_GAS_SPECIES
+  O2(g)
+/
+ACTIVE_GAS_SPECIES
+  GAS_TRANSPORT_IS_UNVETTED
+  CO2(g)
+/
+SORPTION
+  ION_EXCHANGE_RXN
+    CEC 2.00e+02
+    CATIONS
+      Fe++ 1.00d-01
+      Fe+++ 3.00d-01
+      Mg++ 1.10e+00
+      Ca++ 4.10e+00
+      Na+ 1.00e+00 REFERENCE
+      K+ 9.00d-01
+      H+ 1.10e+00
+    /
+  /
+/
+  # fermentation
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 DOM1  + 6.67e-01 H2O  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 6.67e-01 H2(aq)  + 3.33e-01 Tracer 
+    RATE_CONSTANT       6.00e-08 #10 times higher reaction rate
+    MONOD
+      SPECIES_NAME        DOM1
+      HALF_SATURATION_CONSTANT 5.00e-02 #half the Km for easier breakdown
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Acetate-
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 8.00e-02  # Relaxed from 4.00e-02 to 8.00e-02
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Cl-
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.00e-01  # Relaxed from 1.00e-01 to 2.00e-01
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+  
+  # DOM aerobic respiration
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 DOM1  + 1.00e+00 O2(aq)  + 1.00e+00 H2O  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer 
+    RATE_CONSTANT       1.80e-07
+    MONOD
+      SPECIES_NAME        O2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 0.00e+00
+    /
+    MONOD
+      SPECIES_NAME        DOM1
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-16
+    /
+  /
+
+  # Fe(II) abiotic oxidation
+  GENERAL_REACTION
+    REACTION 1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  <-> 1.00e+00 Fe+++  + 5.00e-01 H2O + 1.00e+00 Tracer3
+    FORWARD_RATE        1.00e-2 #1.00e-02
+    BACKWARD_RATE       0.00e-06
+  /
+
+
+
+
+  # Fe(II) microbial oxidation
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  -> 1.00e+00 Fe+++  + 5.00e-01 H2O 
+    RATE_CONSTANT    5.5e-05   !1.5e-06
+    MONOD
+      SPECIES_NAME        O2(aq)
+!      HALF_SATURATION_CONSTANT 1.00e-04
+      HALF_SATURATION_CONSTANT 1.00e-08
+      THRESHOLD_CONCENTRATION 0.00e+00
+    /
+    MONOD
+      SPECIES_NAME        Fe++
+!      HALF_SATURATION_CONSTANT 1.00e-01
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+  /
+  # Methylotrophic methanogenesis, testing
+  # all constants here are arbitrary!!!
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 CH3OH + 1.00e+00 H2(aq) -> 1.00e+00 CH4(aq) + 1.00e+00 H2O
+    RATE_CONSTANT       9.1e-06 #arbitratry number
+    MONOD
+      SPECIES_NAME        CH3OH
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        H2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Cl-
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.00e-01  # Relaxed from 1.00e-01 to 2.00e-01
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+  # Hydrogenotrophic methanogenesis
+  MICROBIAL_REACTION
+    REACTION 4.00e+00 H2(aq)  + 1.00e+00 HCO3-  + 1.00e+00 H+  -> 1.00e+00 CH4(aq)  + 3.00e+00 H2O 
+    RATE_CONSTANT       7.2e-09
+    MONOD
+      SPECIES_NAME        H2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        HCO3-
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Fe+++
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-09  # Relaxed from 1.00e-10 to 1.00e-09
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        H+
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.78e-06  # Relaxed from 1.78e-07 to 1.78e-06 (pH 5.75 to 5.75)
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Cl-
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.00e-01  # Relaxed from 1.00e-01 to 2.00e-01
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+
+  # Acetate aerobic respiration
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer 
+    RATE_CONSTANT       3.00e-07
+    MONOD
+      SPECIES_NAME        O2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 0.00e+00
+    /
+    MONOD
+      SPECIES_NAME        Acetate-
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-16
+    /
+  /
+
+  # Hydrogen oxidation
+  MICROBIAL_REACTION
+    REACTION 2.00e+00 H2(aq)  + 1.00e+00 O2(aq)  -> 2.00e+00 H2O 
+    RATE_CONSTANT       1.5e-06
+    MONOD
+      SPECIES_NAME        H2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-01
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        O2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 0.00e+00
+    /
+  /
+
+  # Fe(III) reduction
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 Acetate-  + 8.00e+00 Fe+++  + 4.00e+00 H2O  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer 
+    RATE_CONSTANT       2.25e-10 !lowering from -08
+    MONOD
+      SPECIES_NAME        Acetate-
+      HALF_SATURATION_CONSTANT 4.00e-2 #4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        Fe+++
+      HALF_SATURATION_CONSTANT 1.00e-10
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+
+  # Sulfate reduction
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 Acetate- + 1.00e+00 SO4-- + 1.00e+00 H+ -> 2.00e+00 HCO3- + 1.00e+00 HS- + 1.00e+00 Tracer
+    RATE_CONSTANT       1.5e-09
+    MONOD
+      SPECIES_NAME        Acetate-
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        SO4--
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Fe+++
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-09  # Relaxed from 1.00e-10 to 1.00e-09
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+
+  # Ebullition
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 CH4(aq) -> 1.00e+00 Tracer2
+    RATE_CONSTANT       3.00e-08
+    MONOD
+      SPECIES_NAME        CH4(aq)
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        CH4(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.5e-3
+      INHIBIT_BELOW_THRESHOLD
+    /
+  /
+
+  # Acetaclastic methanogenesis
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 Acetate-  + 1.00e+00 H2O  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer
+    RATE_CONSTANT       1.5e-8
+    MONOD
+      SPECIES_NAME        Acetate-
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06  # Relaxed from 1.00e-05 to 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Fe+++
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-09  # Relaxed from 1.00e-10 to 1.00e-09
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        H+
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.88e-05  # Relaxed from 2.88e-06 to 2.88e-05
+      INHIBIT_ABOVE_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        H+
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.88e-07  # Relaxed from 2.88e-06 to 2.88e-07
+      INHIBIT_BELOW_THRESHOLD
+    /
+    INHIBITION
+      SPECIES_NAME        Cl-
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 2.00e-01  # Relaxed from 1.00e-01 to 2.00e-01
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+  
+    # Methane oxidation (O2)
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 CH4(aq)  + 2.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 H2O  + 1.00e+00 Tracer
+    RATE_CONSTANT       1.5e-8
+    MONOD
+      SPECIES_NAME        O2(aq)
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        CH4(aq)
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+  /
+
+  # Methane oxidation (SO4)
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer
+    RATE_CONSTANT       1.5e-8
+    MONOD
+      SPECIES_NAME        SO4--
+      HALF_SATURATION_CONSTANT 1.00e-04
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        CH4(aq)
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+
+  # Methane oxidation (Fe)
+  MICROBIAL_REACTION
+    REACTION 1.00e+00 CH4(aq)  + 8.00e+00 Fe+++  + 3.00e+00 H2O  -> 1.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 1.00e+00 Tracer
+    RATE_CONSTANT       1.5e-8
+    MONOD
+      SPECIES_NAME        Fe+++
+      HALF_SATURATION_CONSTANT 1.00e-10
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    MONOD
+      SPECIES_NAME        CH4(aq)
+      HALF_SATURATION_CONSTANT 4.00e-02
+      THRESHOLD_CONCENTRATION 1.10e-15
+    /
+    INHIBITION
+      SPECIES_NAME        O2(aq)
+      TYPE MONOD
+      THRESHOLD_CONCENTRATION 1.00e-06
+      INHIBIT_ABOVE_THRESHOLD
+    /
+  /
+
+
+skip
+  REACTION_SANDBOX
+    SOMDECOMP
+      POOLS
+        cellulose           50.00
+        DOM1                50.00
+      /
+    # Hydrolysis
+    REACTION
+      UPSTREAM_POOL       cellulose
+      DOWNSTREAM_POOL     DOM1                1.00e+00
+      TURNOVER_TIME       1.00d-08 y
+      INHIBITION
+        SPECIES_NAME        DOM1
+        TYPE MONOD
+        THRESHOLD_CONCENTRATION 1.00d-01
+        INHIBIT_ABOVE_THRESHOLD
+      /
+    /
+      CO2_SPECIES_NAME Tracer
+      O2_SPECIES_NAME O2(aq)
+    /
+  /
+noskip
+REACTION_SANDBOX
+  AWINHIBIT
+    WATER_ACTIVITY_THRESHOLD 0.5d0
+    RATE_CONSTANT 1.0d-10  # mol/m^3-sec
+    INHIBITION_TYPE THRESHOLD
+    # Optional temperature dependence
+    # ACTIVATION_ENERGY 50000.0  # J/mol
+    # REFERENCE_TEMPERATURE 25.0  # °C
+  /
+  AWINHIBITACETATE
+    WATER_ACTIVITY_THRESHOLD 0.5d0
+    RATE_CONSTANT 1.0d-10  # mol/m^3-sec
+    INHIBITION_TYPE THRESHOLD
+    # Optional temperature dependence
+    # ACTIVATION_ENERGY 50000.0  # J/mol
+    # REFERENCE_TEMPERATURE 25.0  # °C
+  /
+  AWINHIBITMETHYL
+    WATER_ACTIVITY_THRESHOLD 0.5d0
+    RATE_CONSTANT 1.0d-10  # mol/m^3-sec
+    INHIBITION_TYPE THRESHOLD
+    # Optional temperature dependence
+    # ACTIVATION_ENERGY 50000.0  # J/mol
+    # REFERENCE_TEMPERATURE 25.0  # °C
+  /
+/
+  LOG_FORMULATION
+  TRUNCATE_CONCENTRATION 1.00d-25
+  DATABASE /home/sshindad/miniconda/pflotran/md_test_files/hanford.dat
+
+
+  OUTPUT
+    PH
+    FREE_ION
+      O2(aq)
+      CH4(aq)
+      CO2(aq)
+ !     DOM1
+ !     NH4+
+      HCO3-
+      SO4--
+      HS-
+      Acetate-
+      Cl-
+
+    TOTAL
+      Fe++
+      Fe+++
+      DOM1
+      Tracer2
+      Tracer3
+      CH3OH
+      Mg++
+
+    MINERALS
+      MgCl2.H2O
+  /
+END
+
+#=========================== transport constraints ============================
+CONSTRAINT initial
+  IMMOBILE
+    cellulose            8.00e+03
+    HRimm                1.00d-20
+  /
+  CONCENTRATIONS
+    DOM1                5.00 T
+    H+                  6.5 P
+    O2(aq)              2.d-4 T
+    !O2(g)               1.00d-15 T
+    CO2(aq)             2.d-4 T
+    HCO3-               4.00d-6 T
+    Fe+++               5.3d-5 M Fe(OH)3
+    Fe++                2.4d-3 T Fe(OH)2
+    NH4+                1.00d-15 T
+    Tracer              1.00d-15 T
+    Tracer2             1.00d-15 T
+    Tracer3             1.00d-15 T
+    CH4(aq)             1.00d-15 T
+    Acetate-            1.00d-15 T
+    H2(aq)              1.00d-15 T
+    Mg++                1.00d-01 T
+    Ca++                5.00d-04 T
+    Na+                 6.00 T
+    K+                  2.00d-05 T
+    CH3OH               2.00d-03 T
+    SO4--               1.00d-03 T
+    HS-                 1.00d-15 T
+    H2O                 1.00d-03 T
+    Cl-                 6.00 Z
+  /
+  MINERALS
+    Fe(OH)3             9.6d-6  1.d2 m^2/m^3
+    Fe(OH)2             7.2d-1  1.d2 m^2/m^3
+    Rock(s)             0.5  5.0e3 m^2/m^3
+    MgCl2.H2O           1.0d-02  1.0e2 m^2/m^3
+  /
+
+  
+END
+
+CONSTRAINT atmospheric
+  CONCENTRATIONS
+    DOM1                1.00d-15 T
+    H+                  5.0 P
+    O2(aq)              1.00d-04 T
+    !O2(g)               9.37-03 T
+    CO2(aq)             1.906-05 T    !standard conc
+    HCO3-               1.00d-05 T
+    Fe+++               1.00d-15 T
+    Fe++                1.00d-15 T
+    NH4+                1.00d-15 T
+    Tracer              1.00d-15 T
+    Tracer2             1.00d-15 T
+    Tracer3             1.00d-15 T
+    CH4(aq)             1.00d-15 T
+    Acetate-            1.00d-15 T
+    H2(aq)              1.00d-15 T
+    Mg++                1.00d-15 T
+    Ca++                1.00d-15 T
+    Na+                 1.00d-15 T
+    K+                  1.00d-15 T
+    CH3OH               1.00d-15 T
+    SO4--               1.00d-15 T
+    HS-                 1.00d-15 T
+    H2O                 1.00d-15 T
+    Cl-                 1.00d-15 T
+  /
+  MINERALS
+    Fe(OH)3             1.0d-20  1.d2 m^2/m^3
+    Fe(OH)2             1.0d-20  1.d2 m^2/m^3
+    Rock(s)             0.5  5.0e3 m^2/m^3
+    MgCl2.H2O           1.0d-20  1.0e1 m^2/m^3
+  /
+END
+
+CONSTRAINT drain
+  CONCENTRATIONS
+    DOM1                1.00d-15 T
+    H+                  7.0 P
+    O2(aq)              1.00d-15 T
+    !O2(g)               1.00d-15 T
+    CO2(aq)             1.00d-15 T
+    HCO3-               1.00d-15 T
+    Fe+++               1.00d-15 T
+    Fe++                1.00d-15 T
+    NH4+                1.00d-15 T
+    Tracer              1.00d-15 T
+    Tracer2             1.00d-15 T
+    Tracer3             1.00d-15 T
+    CH4(aq)             1.00d-15 T
+    Acetate-            1.00d-15 T
+    H2(aq)              1.00d-15 T
+    Mg++                1.00d-15 T
+    Ca++                1.00d-15 T
+    Na+                 1.00d-15 T
+    K+                  1.00d-15 T
+    CH3OH               1.00d-15 T
+    SO4--               1.00d-15 T
+    HS-                 1.00d-15 T
+    H2O                 1.00d-15 T
+    Cl-                 1.00d-15 T
+  /
+  MINERALS
+    Fe(OH)3             1.0d-20  1.d2 m^2/m^3
+    Fe(OH)2             1.0d-20  1.d2 m^2/m^3
+    Rock(s)             0.5  5.0e3 m^2/m^3
+    MgCl2.H2O           1.0d-20  1.0e1 m^2/m^3
+  /
+END
+
+CONSTRAINT recharge
+  CONCENTRATIONS
+    DOM1                5.00d-20 T
+    H+                  7.0 P
+    CO2(aq)             1.00d-15 T
+    O2(aq)              1.00d-15 T
+    !O2(g)               1.00d-15 T
+    HCO3-               1.00d-15 T
+    Fe+++               1.00d-15 T
+    Fe++                0.37d-23 T
+    NH4+                1.00d-25 T
+    Tracer              1.00d-25 T
+    Tracer2             1.00d-25 T
+    Tracer3             1.00d-25 T
+    CH4(aq)             1.00d-25 T
+    Acetate-            1.00d-25 T
+    H2(aq)              1.00d-25 T
+    Mg++                5.00d-25 T
+    Ca++                5.00d-25 T
+    Na+                 2.00d-25 T
+    K+                  2.00d-25 T
+    CH3OH               2.00d-25 T
+    SO4--               1.00d-25 T
+    HS-                 1.00d-25 T
+    H2O                 1.00d-25 T
+    Cl-                 1.00d-25 T
+  /
+  MINERALS
+    Fe(OH)3             1.0d-20  1.d2 m^2/m^3
+    Fe(OH)2             1.0d-20  1.d2 m^2/m^3
+    Rock(s)             0.5  5.0e3 m^2/m^3
+    MgCl2.H2O           1.0d-20  1.0e1 m^2/m^3
+  /
+END
+#=========================== solver options ===================================
+NUMERICAL_METHODS TRANSPORT
+! For single point sim, SOLVER DIRECT and other options commented out seems to work the best 
+LINEAR_SOLVER
+  SOLVER DIRECT
+  !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
+  !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
+  !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
+END
+
+NEWTON_SOLVER
+  ATOL 1.d-20
+  RTOL 1.d-15
+  STOL 1.d-10
+  ITOL 1.d-10
+  NUMERICAL_JACOBIAN
+END
+END
+
+#=========================== discretization ===================================
+GRID
+  TYPE structured
+  ORIGIN 0.d0 0.d0 0.d0
+  NXYZ 4 4 4
+  DXYZ 
+     0.25d0 0.25d0 0.25d0 0.25d0
+     0.25d0 0.25d0 0.25d0 0.25d0
+     0.25d0 0.25d0 0.25d0 0.25d0
+  /
+END
+
+PROC 1 1 1
+
+#=========================== fluid properties =================================
+FLUID_PROPERTY
+  PHASE LIQUID
+  DIFFUSION_COEFFICIENT 1.d-7
+END
+
+FLUID_PROPERTY
+  PHASE gas
+  DIFFUSION_COEFFICIENT 2.d-4
+END
+
+#=========================== material properties ==============================
+MATERIAL_PROPERTY soil1
+  ID 1
+  POROSITY 0.97d0
+  !SOIL_COMPRESSIBILITY_FUNCTION DEFAULT     ! BRAGFLO compressed porosity has mathematical issue at high pressure
+  ! 1d-7~1d-8 equivalent to ice expansion of volume, upon 'default' or 'BRAGFLO'
+  ! beyond this range may cause tiny-time stepping
+  SOIL_COMPRESSIBILITY 1.d-07               ! 1d-7~1d-8 is a critical value for freezing expansion in soil;
+  SOIL_REFERENCE_PRESSURE 201325.d0
+  ROCK_DENSITY 2650.0d0
+  SPECIFIC_HEAT 830.0d0
+  THERMAL_CONDUCTIVITY_DRY 0.12037926674717922d0
+  THERMAL_CONDUCTIVITY_WET 1.6082691464310437d0
+  CHARACTERISTIC_CURVES sf01
+  PERMEABILITY
+    PERM_X 6.5870260083342112d-013
+    PERM_Y 6.5870260083342112d-013
+    PERM_Z 9.5870260083342112d-14
+  /
+/
+MATERIAL_PROPERTY soil2
+  ID 2
+  POROSITY 0.62d0
+  !SOIL_COMPRESSIBILITY_FUNCTION DEFAULT     ! BRAGFLO compressed porosity has mathematical issue at high pressure
+  ! 1d-7~1d-8 equivalent to ice expansion of volume, upon 'default' or 'BRAGFLO'
+  ! beyond this range may cause tiny-time stepping
+  SOIL_COMPRESSIBILITY 1.d-07               ! 1d-7~1d-8 is a critical value for freezing expansion in soil;
+  SOIL_REFERENCE_PRESSURE 201325.d0
+  ROCK_DENSITY 2650.0d0
+  SPECIFIC_HEAT 830.0d0
+  THERMAL_CONDUCTIVITY_DRY 0.12037926674717922d0
+  THERMAL_CONDUCTIVITY_WET 1.6082691464310437d0
+  CHARACTERISTIC_CURVES sf01
+  PERMEABILITY
+    PERM_X 6.5870260083342112d-013
+    PERM_Y 6.5870260083342112d-013
+    PERM_Z 4.5870260083342112d-13
+  /
+/
+
+# == saturation / permeability functions ======================================
+
+CHARACTERISTIC_CURVES sf01
+  SATURATION_FUNCTION VAN_GENUCHTEN
+    LIQUID_RESIDUAL_SATURATION 0.d0
+    ALPHA 1.d-4
+    M 0.5d0
+    MAX_CAPILLARY_PRESSURE 1.d6
+  /
+  PERMEABILITY_FUNCTION MUALEM
+    PHASE LIQUID
+    LIQUID_RESIDUAL_SATURATION 0.d0
+    M 0.5d0
+  /
+  PERMEABILITY_FUNCTION MUALEM_VG_GAS
+    PHASE GAS
+    LIQUID_RESIDUAL_SATURATION 0.d0
+    GAS_RESIDUAL_SATURATION 1.d-5
+    M 0.5d0
+  /
+END
+
+#=========================== output options ===================================
+# this first block is for hdf5. uncomment/comment if you want the second block (tec)
+OUTPUT
+  TIME_UNITS d
+  !SCREEN PERIODIC 10000
+
+  SNAPSHOT_FILE
+    FORMAT HDF5              
+    PERIODIC TIME 1 d
+    VARIABLES
+      NO_FLOW_VARIABLES
+      NO_ENERGY_VARIABLES
+      LIQUID_SATURATION
+    /
+  /
+
+  OBSERVATION_FILE
+    PERIODIC TIME 1 d       
+    !NO_PRINT_INITIAL
+    !NO_PRINT_FINAL
+  /
+/
+
+!OUTPUT
+!  SCREEN PERIODIC 10000
+!  PERIODIC TIME 1 d  # Output every 6 months (365.25/2 days)
+!  FORMAT TECPLOT POINT
+!  OBSERVATION_FILE
+!  PERIODIC TIME 1 d  # Output every 6 months
+!  VARIABLES
+! 	NO_FLOW_VARIABLES
+!	NO_ENERGY_VARIABLES
+!  LIQUID_SATURATION
+!  /
+!/
+!END
+
+#=========================== times ============================================
+TIME
+  FINAL_TIME 5 d  # 10 years (365.25 * 10 days)
+  INITIAL_TIMESTEP_SIZE 2.0d0 h
+  MAXIMUM_TIMESTEP_SIZE 12.d0 h
+END
+
+#=========================== regions ==========================================
+REGION all
+  COORDINATES
+    0.d0 0.d0 0.d0
+    1.0d0 1.0d0 1.0d0
+  /
+END
+
+REGION top_surface
+  COORDINATES
+    0.d0 0.d0 1.0d0
+    1.0d0 1.0d0 1.0d0
+  /
+  FACE TOP
+END
+
+REGION bottom_surface
+  COORDINATES
+    0.d0 0.d0 0.d0
+    1.0d0 1.0d0 0.d0
+  /
+  FACE BOTTOM
+END
+
+REGION west_surface
+  COORDINATES
+    0.d0 0.d0 0.d0
+    0.d0 1.0d0 1.0d0
+  /
+  FACE WEST
+END
+
+REGION east_surface
+  COORDINATES
+    1.0d0 0.d0 0.d0
+    1.0d0 1.0d0 1.0d0
+  /
+  FACE EAST
+END
+
+REGION south_surface
+  COORDINATES
+    0.d0 0.d0 0.d0
+    1.0d0 0.d0 1.0d0
+  /
+  FACE SOUTH
+END
+
+REGION north_surface
+  COORDINATES
+    0.d0 1.0d0 0.d0
+    1.0d0 1.0d0 1.0d0
+  /
+  FACE NORTH
+END
+
+REGION center_obs
+  COORDINATE 0.5d0 0.5d0 0.5d0
+END
+
+#=========================== observation points ===============================
+OBSERVATION
+  REGION center_obs
+END
+
+#=========================== transport conditions =============================
+FLOW_CONDITION initial
+  TYPE
+    GAS_PRESSURE dirichlet
+    GAS_SATURATION dirichlet
+    TEMPERATURE dirichlet
+  /
+  GAS_PRESSURE 2.d5
+  GAS_SATURATION 0.25
+  TEMPERATURE 8.d0 ## increase temperature from 4 degC to 8 degC
+/
+
+FLOW_CONDITION atmospheric
+  TYPE
+    GAS_PRESSURE dirichlet
+    GAS_SATURATION dirichlet
+    TEMPERATURE dirichlet
+  /
+  GAS_PRESSURE 2.d5
+  GAS_SATURATION 0.15
+  TEMPERATURE 8.d0 ## increase temperature from 4 degC to 8 degC
+/
+
+FLOW_CONDITION drain
+  TYPE
+    RATE volumetric_rate
+  /
+  RATE LIST
+  TIME_UNITS d
+  DATA_UNITS m^3/s
+       ! liquid gas   energy
+0.0	-5.0d-09	0.d0	0.d0  ! constant drain rate
+100.0	-5.0d-09	0.d0	0.d0  ! constant drain rate
+/
+/
+
+
+TRANSPORT_CONDITION drain
+  TYPE dirichlet
+  CONSTRAINT_LIST
+    0.d0 drain
+  /
+END
+
+FLOW_CONDITION recharge
+  TYPE
+    RATE volumetric_rate
+  /
+  RATE LIST
+  TIME_UNITS d
+  DATA_UNITS m^3/s
+       ! liquid gas   energy
+0.0	0.d0	0.d0	0.d0      ! no rain initially
+! 20.0	0.d0	0.d0	0.d0     ! no rain until day 20
+! 20.5	2.d-5	0.d0	0.d0     ! rain event starts - moderate intensity
+! 21.0	2.d-5	0.d0	0.d0     ! rain continues for 0.5 days (12 hours)
+! 21.5	0.d0	0.d0	0.d0     ! rain stops
+! 100.0	0.d0	0.d0	0.d0     ! no more rain
+/
+/
+
+
+TRANSPORT_CONDITION recharge
+  TYPE dirichlet
+  CONSTRAINT_LIST
+    0.d0 recharge
+  /
+END
+
+TRANSPORT_CONDITION initial
+  TYPE dirichlet
+  CONSTRAINT_LIST
+    0.d0 initial
+  /
+END
+
+TRANSPORT_CONDITION atmospheric
+  TYPE dirichlet
+  CONSTRAINT_LIST
+    0.d0 atmospheric
+  /
+END
+
+
+#=========================== condition couplers ===============================
+# initial condition
+INITIAL_CONDITION
+  TRANSPORT_CONDITION initial
+  FLOW_CONDITION initial
+  REGION all
+END
+
+# boundary conditions - only top surface exposed to atmosphere (subsurface cube)
+BOUNDARY_CONDITION top_atm
+  TRANSPORT_CONDITION atmospheric
+  FLOW_CONDITION atmospheric
+  REGION top_surface
+END
+
+#=========================== stratigraphy couplers ============================
+STRATA
+  REGION all
+  MATERIAL soil1
+END
+
+END_SUBSURFACE
+# Description: Simple microbial decomposition and dissolution to DOM network
+# Rate constants estimated to show different processes
