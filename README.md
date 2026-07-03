@@ -7,6 +7,8 @@ Simulation of microbial redox networks (methanogenesis, sulfate reduction, iron 
 ```
 ├── README.md
 ├── requirements.txt          ← Python dependencies
+├── Containerfile             ← Docker/Podman image with custom-sandbox PFLOTRAN
+├── scripts/                  ← PFLOTRAN sandbox patch + build scripts
 ├── generator/                ← Python code to produce PFLOTRAN .in files
 ├── sandbox/                  ← Custom Fortran 90 reaction modules (water activity inhibition)
 ├── visualization/            ← Post-processing pipeline (extract → plot → gradient/flux)
@@ -58,8 +60,105 @@ python step_orchestra.py  # runs step1 → step2 → step3 → step4
 
 ---
 
-## Installing PFLOTRAN
+## Running PFLOTRAN
 
+Most workflows in this repo need a PFLOTRAN binary. Choose the option that matches
+your input decks:
+
+Also, note that if you are using Docker, you don't NEED to install PFLOTRAN separately.
+
+| Decks | Custom sandboxes? | Binary |
+|-------|-------------------|--------|
+| `exploratory/pflotran/testing/1`–`6` | No | Stock PFLOTRAN |
+| `exploratory/pflotran/testing/7`–`10`, `batch/9_addnitrogen.in` | Yes (AWINHIBIT) | Custom build below |
+| `generator/`-produced decks with `enable_aw_sandbox=True` | Yes | Custom build below |
+
+All decks should point `DATABASE` at `sandbox/hanford.dat` (the committed decks
+use developer-specific absolute paths; the integration tests rewrite this
+automatically).
+
+### Option A: Docker / Podman (recommended)
+
+Build the test image once. It includes PFLOTRAN v6 with the AWINHIBIT sandboxes
+from `sandbox/` pre-compiled at `/opt/pflotran-py/pflotran`:
+
+```bash
+# Docker
+docker build -t pflotran-py-test -f Containerfile .
+
+# Podman (Linux)
+podman build -t pflotran-py-test -f Containerfile .
+```
+
+**Stock PFLOTRAN tests** (no custom sandboxes, e.g. deck `3_smaller_grid.in`):
+
+```bash
+docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/test_docker_e2e.py -v --tb=short
+```
+
+**Custom sandbox tests** (AWINHIBIT decks 7–10):
+
+```bash
+docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/test_custom_docker_e2e.py -v --tb=short
+```
+
+**All integration tests:**
+
+```bash
+docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/ -v --tb=short -m integration
+```
+
+**Run the full custom-sandbox pipeline** (prep deck, simulate, extract, plot):
+
+```bash
+docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  python3 tests/test_custom_docker_e2e.py
+```
+
+Output lands in `tests/custom_e2e_output/` (CSV + PNGs).
+
+On Linux with Podman, add `:Z` to the volume mount for SELinux:
+`-v "$(pwd)":/work:Z`.
+
+### Option B: Custom sandbox build (manual, inside base image)
+
+If you already have the base PFLOTRAN image but haven't built `Containerfile`:
+
+```bash
+docker run --rm -v "$(pwd)":/work -w /work \
+  pshuai/jupyter-pflotran-multiplatform:base_v6 \
+  bash -c "./scripts/build_pflotran_custom.sh && python3 tests/test_custom_docker_e2e.py"
+```
+
+This patches PFLOTRAN with `scripts/patch_pflotran_sandboxes.py` and writes
+`build/pflotran`. Set `PFLOTRAN_CUSTOM_EXE` to point at that binary.
+
+### Option C: Stock PFLOTRAN only (no Docker)
+
+For decks without AWINHIBIT sandboxes, use a standard PFLOTRAN install. See
+[Installing PFLOTRAN](#installing-pflotran) below for building from source on
+Linux/HPC. Point `DATABASE` at `sandbox/hanford.dat` and run:
+
+```bash
+mpirun -n 1 /path/to/pflotran -input_prefix my_simulation
+```
+
+To patch an existing PFLOTRAN source tree with the custom sandboxes by hand:
+
+```bash
+python3 scripts/patch_pflotran_sandboxes.py \
+  --pflotran-src /path/to/pflotran/src/pflotran \
+  --sandbox-dir sandbox/
+cd /path/to/pflotran/src/pflotran && make clean && make pflotran
+```
+
+---
+
+## Installing PFLOTRAN
+Remember, this is only if you don't want to use the docker stuff.
 ### Linux
 
 See the [official docs](https://documentation.pflotran.org/user_guide/how_to/installation/linux.html#linux-install) for details.
@@ -294,7 +393,12 @@ Sanskriti's exploratory PFLOTRAN work, covering iterative input deck development
 
 ### CI
 
-This repo uses GitHub Actions to run `black`, `flake8`, and `pytest` on all PRs against `main`. PRs must pass all checks before merging.
+This repo uses GitHub Actions on all PRs against `main`:
+
+| Workflow | What it runs |
+|----------|--------------|
+| `ci.yml` | `black`, `flake8`, `pytest -m "not integration"` (no PFLOTRAN needed) |
+| `integration.yml` | Builds `Containerfile`, runs `pytest -m integration` (real PFLOTRAN simulations) |
 
 ### Running checks locally
 
@@ -302,7 +406,15 @@ This repo uses GitHub Actions to run `black`, `flake8`, and `pytest` on all PRs 
 pip install -r requirements.txt
 black --check .
 flake8
-pytest
+pytest -m "not integration"    # fast: no PFLOTRAN binary required
+```
+
+Integration tests (require Docker — see [Running PFLOTRAN](#running-pflotran)):
+
+```bash
+docker build -t pflotran-py-test -f Containerfile .
+docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/ -v --tb=short -m integration
 ```
 
 ---
