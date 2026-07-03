@@ -1,4 +1,5 @@
 """Smoke tests to verify the package imports and constants are sane."""
+
 from exploratory.constants import T, molar_mass_C
 
 
