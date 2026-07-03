@@ -1,7 +1,4 @@
 """Smoke tests to verify the package imports and constants are sane."""
-
-import sys
-import os
 from exploratory.constants import T, molar_mass_C
 
 
