@@ -2,9 +2,6 @@
 
 import sys
 import os
-
-# Allow imports from repo root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from exploratory.constants import T, molar_mass_C
 
 
