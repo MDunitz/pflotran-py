@@ -1,4 +1,4 @@
-### imports
+# imports
 import math
 import streamlit as st
 from astropy import units as u
@@ -6,11 +6,11 @@ from astropy.constants import R
 from astropy import constants as const
 import constants
 
-### 1) title for streamlit app
+# 1) title for streamlit app
 st.title("Linear vs Exponential Decay Calculator (100 years)")
 
 
-### 2) definining a few functions that we'll use for lin AND exp decay calculations
+# 2) definining a few functions that we'll use for lin AND exp decay calculations
 #   2a) linear release rates
 def linear_release_rates(pct_total: float, years: float):
     frac_per_year = pct_total / years / constants.percent_conversion
@@ -62,7 +62,7 @@ def concentration_metrics(
     return fraction * constants.percent_conversion, ppm
 
 
-###  3) linear and exponential calculations
+# 3) linear and exponential calculations
 
 
 def calc_linear(pct_total: float, start_C: float, years: float):
@@ -125,8 +125,7 @@ decay_model = st.selectbox("Decay model:", ["Linear", "Exponential"])
 if st.button("Compute"):
     if decay_model == "Linear":
         res = calc_linear(pct_total_y, start_carbon, num_years)
-        st.markdown(
-            f"""
+        st.markdown(f"""
         **Assuming {pct_total_y:.2f}% released in your set years**
 
         - % lost in 1 yr: `{res['pct_per_year']:.6f} %`
@@ -137,12 +136,10 @@ if st.button("Compute"):
         - CO₂ volume at STP: `{res['liters_CO2']:.6f} L` (`{res['ml_CO2']:.6f} mL`)
         - `{res['pct_40ml']:.6f} %` of a 40 mL headspace
         - `≈ {res['ppm_in_1m3']:.2f} ppm` in 1 m³ air
-        """
-        )
+        """)
     else:
         res = calc_exponential(pct_total_y, start_carbon, num_years)
-        st.markdown(
-            f"""
+        st.markdown(f"""
         **Assuming {pct_total_y:.2f}% released in your set years**
 
         - % lost in first yr: `{res['pct_first_year']:.6f} %`
@@ -154,5 +151,4 @@ if st.button("Compute"):
         - CO₂ volume at STP: `{res['liters_CO2']:.6f} L` (`{res['ml_CO2']:.6f} mL`)
         - `{res['pct_40ml']:.6f} %` of a 40 mL headspace
         - `≈ {res['ppm_in_1m3']:.2f} ppm` in 1 m³ air
-        """
-        )
+        """)
