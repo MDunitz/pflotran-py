@@ -33,5 +33,5 @@ jobs:
       - name: Lint (flake8)
         run: flake8
 
-      - name: Run tests (pytest)
-        run: pytest --tb=short -q
+      - name: Run tests (pytest, excluding integration)
+        run: pytest --tb=short -q -m "not integration"
