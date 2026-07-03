@@ -1,0 +1,24 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"  # weekly Monday 6am UTC
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  pflotran-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests in PFLOTRAN container (Podman)
+        run: |
+          podman run --rm \
+            -v ${{ github.workspace }}:/work:Z \
+            -w /work \
+            pshuai/jupyter-pflotran-multiplatform:base_v6 \
+            bash -c "pip install --no-cache-dir -r requirements.txt && \
+                     python3 -m pytest tests/ -v --tb=short"
