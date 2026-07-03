@@ -9,3 +9,8 @@ pandas
 numpy
 scipy
 tqdm
+
+# Development
+black
+flake8
+pytest

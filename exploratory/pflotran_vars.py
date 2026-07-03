@@ -3,9 +3,9 @@
 ############################
 """
 Anything that was not specified to be changed, is taken from the paper below:
-O’Meara, T. A., Yuan, F., Sulman, B. N., Noyce, G. L., Rich, R., Thornton, P. E., & Megonigal, J. P. (2024). 
-Developing a Redox Network for Coastal Saltmarsh Systems in the PFLOTRAN Reaction Model. 
-Journal of Geophysical Research: Biogeosciences, 129(3), e2023JG007633. https://doi.org/10.1029/2023JG007633 
+O’Meara, T. A., Yuan, F., Sulman, B. N., Noyce, G. L., Rich, R., Thornton, P. E., & Megonigal, J. P. (2024).
+Developing a Redox Network for Coastal Saltmarsh Systems in the PFLOTRAN Reaction Model.
+Journal of Geophysical Research: Biogeosciences, 129(3), e2023JG007633. https://doi.org/10.1029/2023JG007633
 
 """
 
@@ -77,7 +77,7 @@ ferm_acetate_inhib_above = 4.00e-02
 dom_aerobic_rxn_const = 1.80e-07
 
 dom_aerobic_o2_halfsat_conc = 1.00e-04
-dom_aerobic_o2_thresh_conc = 0.00e+00
+dom_aerobic_o2_thresh_conc = 0.00e00
 
 dom_aerobic_dom1_halfsat_conc = 1.00e-01
 dom_aerobic_dom1_thresh_conc = 1.10e-16
@@ -98,7 +98,7 @@ fe2_abiotic_backward_rate = 0.00e-06
 fe2_microbial_rxn_const = 5.5e-05
 
 fe2_microbial_o2_halfsat_conc = 1.00e-08
-fe2_microbial_o2_thresh_conc = 0.00e+00
+fe2_microbial_o2_thresh_conc = 0.00e00
 
 fe2_microbial_fe2_halfsat_conc = 1.00e-04
 fe2_microbial_fe2_thresh_conc = 1.10e-15
@@ -128,7 +128,7 @@ hydro_methano_h_inhib_above = 1.78e-07
 acetate_aerobic_rxn_const = 3.00e-07
 
 acetate_aerobic_o2_halfsat_conc = 1.00e-04
-acetate_aerobic_o2_thresh_conc = 0.00e+00
+acetate_aerobic_o2_thresh_conc = 0.00e00
 
 acetate_aerobic_acetate_halfsat_conc = 4.00e-02
 acetate_aerobic_acetate_thresh_conc = 1.10e-16
@@ -144,7 +144,7 @@ h2_oxidation_h2_halfsat_conc = 1.00e-01
 h2_oxidation_h2_thresh_conc = 1.10e-15
 
 h2_oxidation_o2_halfsat_conc = 1.00e-04
-h2_oxidation_o2_thresh_conc = 0.00e+00
+h2_oxidation_o2_thresh_conc = 0.00e00
 
 # 8) Fe(III) reduction
 """
@@ -213,7 +213,7 @@ methyl_methano_o2_inhib_above = 1.00e-05
 Initial conditions for the sediment system
 """
 # Immobile species concentrations
-initial_cellulose = 8.00e+03
+initial_cellulose = 8.00e03
 initial_hrimm = 1.00e-20
 
 # Aqueous species concentrations (M - molarity, T - total, P - pH, G - gas equilibrium)
@@ -238,13 +238,13 @@ initial_ch3oh = 2.00e-15  # T
 
 # Mineral volume fractions and surface areas
 initial_fe_oh3_volfrac = 9.6e-6  # volume fraction
-initial_fe_oh3_surface = 1.0e2   # m^2/m^3
+initial_fe_oh3_surface = 1.0e2  # m^2/m^3
 
-initial_fe_oh2_volfrac = 7.2e-1  # volume fraction  
-initial_fe_oh2_surface = 1.0e2   # m^2/m^3
+initial_fe_oh2_volfrac = 7.2e-1  # volume fraction
+initial_fe_oh2_surface = 1.0e2  # m^2/m^3
 
-initial_rock_volfrac = 0.5       # volume fraction
-initial_rock_surface = 5.0e3     # m^2/m^3
+initial_rock_volfrac = 0.5  # volume fraction
+initial_rock_surface = 5.0e3  # m^2/m^3
 
 # CONSTRAINT sed_air_interface - Sediment-air interface conditions
 """
@@ -271,11 +271,11 @@ sedair_ch3oh = 2.00e-15  # T
 
 # Mineral conditions at sediment-air interface
 sedair_fe_oh3_volfrac = 0.875e-3  # volume fraction
-sedair_fe_oh3_surface = 1.0e2     # m^2/m^3
-sedair_fe_oh2_volfrac = 0.0e-20   # volume fraction
-sedair_fe_oh2_surface = 1.0e2     # m^2/m^3
-sedair_rock_volfrac = 0.5         # volume fraction
-sedair_rock_surface = 5.0e3       # m^2/m^3
+sedair_fe_oh3_surface = 1.0e2  # m^2/m^3
+sedair_fe_oh2_volfrac = 0.0e-20  # volume fraction
+sedair_fe_oh2_surface = 1.0e2  # m^2/m^3
+sedair_rock_volfrac = 0.5  # volume fraction
+sedair_rock_surface = 5.0e3  # m^2/m^3
 
 # CONSTRAINT drain - Drainage boundary conditions
 """
@@ -352,10 +352,10 @@ THERMAL_CONDUCTIVITY_WET 1.6082691464310437d0
 Simulation time control parameters
 """
 final_time = 100  # d (days)
-initial_timestep_size = 1.0  # h (hours) 
+initial_timestep_size = 1.0  # h (hours)
 maximum_timestep_size = 12.0  # h (hours)
 
-# OUTPUT block parameters  
+# OUTPUT block parameters
 """
 Output frequency and format control
 """
@@ -387,9 +387,9 @@ drain_end_time = 100.0  # d
 drain_rate = -5.0e-09  # m^3/s (constant drainage rate)
 
 # Recharge condition - single rain event
-recharge_no_rain_start = 0.0   # d
+recharge_no_rain_start = 0.0  # d
 recharge_no_rain_until = 20.0  # d
-recharge_rain_start = 20.5     # d  
-recharge_rain_end = 21.5       # d
-recharge_rain_rate = 2.0e-5    # m^3/s
-recharge_no_rain_after = 100.0 # d
+recharge_rain_start = 20.5  # d
+recharge_rain_end = 21.5  # d
+recharge_rain_rate = 2.0e-5  # m^3/s
+recharge_no_rain_after = 100.0  # d
