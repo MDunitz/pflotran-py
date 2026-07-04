@@ -14,13 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build PFLOTRAN test image (Podman)
-        run: podman build -t pflotran-py-test -f Containerfile .
+      - name: Build PFLOTRAN test image (Docker)
+        run: docker build -t pflotran-py-test -f Containerfile .
 
       - name: Run integration tests in container
         run: |
-          podman run --rm \
-            -v ${{ github.workspace }}:/work:Z \
+          docker run --rm \
+            -v ${{ github.workspace }}:/work \
             -w /work \
             pflotran-py-test \
             pytest tests/ -v --tb=short -m integration
