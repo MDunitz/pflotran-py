@@ -45,23 +45,29 @@ def pipeline():
 
 
 def test_pflotran_produced_snapshots(pipeline):
-    assert pipeline["n_snapshots"] == 6
+    expected = e2e.parse_expected_snapshots(DEFAULT_INPUT)
+    if expected is None:
+        assert pipeline["n_snapshots"] > 0
+    else:
+        assert pipeline["n_snapshots"] == expected
 
 
 def test_extracted_grid_shape(pipeline):
     df = pipeline["dataframe"]
-    assert len(df) == 64 * pipeline["n_snapshots"]
+    cells = e2e.parse_grid_cells(DEFAULT_INPUT)
+    assert cells is not None, "Could not parse NXYZ from deck"
+    assert len(df) == cells * pipeline["n_snapshots"]
 
 
 def test_species_columns_present(pipeline):
     df = pipeline["dataframe"]
-    for col in SPECIES_MAP.values():
+    for col in pipeline["species_map"].values():
         assert col in df.columns
 
 
 def test_concentrations_physical(pipeline):
     df = pipeline["dataframe"]
-    for col in SPECIES_MAP.values():
+    for col in pipeline["species_map"].values():
         vals = df[col].values
         assert np.all(np.isfinite(vals)), f"Non-finite values in {col}"
         assert np.all(vals >= 0), f"Negative concentration in {col}"
@@ -69,7 +75,7 @@ def test_concentrations_physical(pipeline):
 
 def test_flux_columns_finite(pipeline):
     df = pipeline["dataframe"]
-    for species in SPECIES_MAP:
+    for species in pipeline["species_map"]:
         col = shared_utils.flux_col(species, "magnitude")
         assert col in df.columns
         assert np.all(np.isfinite(df[col].dropna().values))
@@ -77,7 +83,7 @@ def test_flux_columns_finite(pipeline):
 
 def test_co2_is_produced(pipeline):
     df = pipeline["dataframe"]
-    co2 = SPECIES_MAP["CO2"]
+    co2 = pipeline["species_map"]["CO2"]
     t0 = df.loc[df["Time Index"] == 0, co2].mean()
     tf = df.loc[df["Time Index"] == df["Time Index"].max(), co2].mean()
     assert tf > 10 * t0, f"CO2 did not accumulate (t0={t0:.3e}, tf={tf:.3e})"
@@ -114,7 +120,8 @@ def main(argv):
         custom_sandboxes=False,
     )
     print(f"Executable : {result['executable']}")
-    print(f"Snapshots  : {result['n_snapshots']} .tec files")
+    print(f"Format     : {result['output_format']}")
+    print(f"Snapshots  : {result['n_snapshots']}")
     print(f"Rows       : {len(result['dataframe'])}")
     print(f"CSV        : {result['csv']}")
     print("Images     :")

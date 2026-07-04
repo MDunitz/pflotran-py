@@ -149,6 +149,71 @@ def discover_snapshots(workdir, prefix="sim"):
     return sorted(glob.glob(pattern))
 
 
+# ── Deck parsing (derive expectations instead of hardcoding) ──────
+
+
+def _fortran_float(token):
+    """Parse a PFLOTRAN numeric token, handling Fortran 'd' exponents."""
+    return float(re.sub(r"[dD]", "e", token))
+
+
+_TIME_UNIT_DAYS = {
+    "s": 1.0 / 86400.0,
+    "sec": 1.0 / 86400.0,
+    "m": 1.0 / 1440.0,
+    "min": 1.0 / 1440.0,
+    "h": 1.0 / 24.0,
+    "hr": 1.0 / 24.0,
+    "d": 1.0,
+    "day": 1.0,
+    "y": 365.25,
+    "yr": 365.25,
+}
+
+
+def parse_grid_cells(deck_path):
+    """Return nx*ny*nz from the deck's NXYZ line (or None if absent)."""
+    with open(deck_path) as f:
+        for line in f:
+            m = re.search(r"^\s*NXYZ\s+(\d+)\s+(\d+)\s+(\d+)", line)
+            if m:
+                nx, ny, nz = (int(g) for g in m.groups())
+                return nx * ny * nz
+    return None
+
+
+def parse_expected_snapshots(deck_path):
+    """Estimate snapshot count from FINAL_TIME and the OUTPUT PERIODIC TIME.
+
+    PFLOTRAN writes a snapshot at t=0 and every period up to FINAL_TIME, so the
+    count is floor(final / period) + 1. Returns None if it cannot be determined.
+    """
+    text = open(deck_path).read()
+
+    final = re.search(r"FINAL_TIME\s+([0-9.dDeE+-]+)\s+([A-Za-z]+)", text)
+    period = re.search(
+        r"OUTPUT\b.*?\bPERIODIC\s+TIME\s+([0-9.dDeE+-]+)\s+([A-Za-z]+)",
+        text,
+        flags=re.DOTALL,
+    )
+    if not final or not period:
+        return None
+
+    try:
+        final_days = (
+            _fortran_float(final.group(1)) * _TIME_UNIT_DAYS[final.group(2).lower()]
+        )
+        period_days = (
+            _fortran_float(period.group(1)) * _TIME_UNIT_DAYS[period.group(2).lower()]
+        )
+    except KeyError:
+        return None
+    if period_days <= 0:
+        return None
+
+    return int(round(final_days / period_days)) + 1
+
+
 def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     import shared_utils  # imported by callers after sys.path setup
 
@@ -254,15 +319,23 @@ def run_full_pipeline(
         prepare_input(src_in, workdir, custom_sandboxes=custom_sandboxes)
         log = run_pflotran(exe, workdir)
 
-        snapshots = discover_snapshots(workdir)
-        if not snapshots:
-            raise RuntimeError("PFLOTRAN produced no snapshot .tec files.")
+        # Detect output format from files actually produced (TEC or HDF5).
+        tec_snapshots = discover_snapshots(workdir)
+        h5_path = step1_extract.find_hdf5_output(workdir, prefix="sim")
+        if tec_snapshots:
+            output_format = "tec"
+        elif h5_path is not None:
+            output_format = "hdf5"
+        else:
+            raise RuntimeError("PFLOTRAN produced no snapshot output (.tec or .h5).")
 
-        df = step1_extract.extract_pflotran_data_tec(
+        df = step1_extract.extract_pflotran_data(
             data_dir=workdir,
-            file_name_template="sim-{:03d}.tec",
-            n_files=len(snapshots),
+            prefix="sim",
+            data_format=output_format,
         )
+        n_snapshots = int(df["Time Index"].nunique())
+
         species_map = resolve_species_map(df, base_map=species_map)
         df = shared_utils.calculate_gradients(df, species_map)
         df = shared_utils.convert_to_flux(
@@ -277,7 +350,8 @@ def run_full_pipeline(
             "input": src_in,
             "executable": exe,
             "log": log,
-            "n_snapshots": len(snapshots),
+            "output_format": output_format,
+            "n_snapshots": n_snapshots,
             "dataframe": df,
             "species_map": species_map,
             "csv": csv_path,
