@@ -16,6 +16,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_VIZ_DIR = os.path.join(REPO_ROOT, "visualization")
+if _VIZ_DIR not in sys.path:
+    sys.path.insert(0, _VIZ_DIR)
+
+import step1_extract  # noqa: E402
+import shared_utils  # noqa: E402
+
 HANFORD_DB = os.path.join(REPO_ROOT, "sandbox", "hanford.dat")
 CUSTOM_PFLOTRAN = os.path.join(REPO_ROOT, "build", "pflotran")
 
@@ -215,8 +222,6 @@ def parse_expected_snapshots(deck_path):
 
 
 def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
-    import shared_utils  # imported by callers after sys.path setup
-
     os.makedirs(output_dir, exist_ok=True)
     times = sorted(flux_df["Time Index"].unique())
     images = {}
@@ -310,9 +315,6 @@ def run_full_pipeline(
     temperature_c=TEMPERATURE_C,
     keep_workdir=False,
 ):
-    import step1_extract
-    import shared_utils
-
     os.makedirs(output_dir, exist_ok=True)
     workdir = tempfile.mkdtemp(prefix="pflotran_e2e_")
     try:

@@ -10,6 +10,9 @@
 # ##################################################################
 import os
 import glob
+
+import h5py
+import numpy as np
 import pandas as pd
 
 
@@ -107,8 +110,6 @@ def extract_pflotran_data_tec(
 
 def _h5_cell_centers(edges):
     """Convert grid edge coordinates (length n+1) to cell centers (length n)."""
-    import numpy as np
-
     edges = np.asarray(edges, dtype=float)
     if len(edges) >= 2:
         return 0.5 * (edges[:-1] + edges[1:])
@@ -145,9 +146,6 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
     column (0-based, ordered by simulation time), and one column per output
     variable using Tecplot-compatible names.
     """
-    import numpy as np
-    import h5py
-
     all_data = []
     with h5py.File(filepath, "r") as h5:
         coords = h5["Coordinates"]
