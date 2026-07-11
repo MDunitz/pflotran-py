@@ -100,3 +100,32 @@ def test_extract_hdf5_no_snapshots_raises(tmp_path):
 
     with pytest.raises(ValueError, match="No time-series data"):
         hdf5_extract.extract_pflotran_data_hdf5(str(path))
+
+
+def test_extract_hdf5_warns_on_shape_mismatch(tmp_path):
+    """Non-grid datasets are skipped with a UserWarning (not silently)."""
+    path = tmp_path / "mixed.h5"
+    nx, ny, nz = 2, 2, 2
+
+    with h5py.File(path, "w") as h5:
+        coords = h5.create_group("Coordinates")
+        coords.create_dataset("X [m]", data=np.linspace(0.0, 2.0, nx + 1))
+        coords.create_dataset("Y [m]", data=np.linspace(0.0, 2.0, ny + 1))
+        coords.create_dataset("Z [m]", data=np.linspace(0.0, 2.0, nz + 1))
+
+        for gname in ["Time:  0.00000E+00 d", "Time:  1.00000E+00 d"]:
+            group = h5.create_group(gname)
+            group.create_dataset(
+                "Free_CO2(aq) [M]",
+                data=np.ones((nx, ny, nz)),
+            )
+            # Non-grid dataset that should be skipped with a warning
+            group.create_dataset("Some_Scalar", data=np.array([42.0]))
+
+    with pytest.warns(UserWarning, match="Skipping 'Some_Scalar'.*does not match"):
+        df = hdf5_extract.extract_pflotran_data_hdf5(str(path))
+
+    assert "Free CO2(aq) [M]" in df.columns
+    assert "Some_Scalar" not in df.columns
+    # One warning per variable name, not one per snapshot
+    assert len(df) == nx * ny * nz * 2

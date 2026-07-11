@@ -2,6 +2,7 @@
 
 import glob
 import os
+import warnings
 
 import h5py
 import numpy as np
@@ -71,6 +72,9 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
             print(f"   grid: {len(xc)} x {len(yc)} x {len(zc)}")
             print(f"   snapshots: {len(time_groups)}")
 
+        # Warn once per variable name so multi-snapshot files don't spam.
+        warned_shape_mismatches = set()
+
         for time_idx, gname in enumerate(time_groups):
             group = h5[gname]
             frame = {
@@ -80,8 +84,19 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
             }
             for var_name in group.keys():
                 data = group[var_name][:]
-                if getattr(data, "shape", None) != xx.shape:
-                    # Skip scalars / non-grid datasets
+                data_shape = getattr(data, "shape", None)
+                if data_shape != xx.shape:
+                    # Skip scalars / non-grid datasets, but alert so unexpected
+                    # shapes are not dropped silently.
+                    if var_name not in warned_shape_mismatches:
+                        warnings.warn(
+                            f"Skipping '{var_name}' in '{gname}': shape "
+                            f"{data_shape} does not match expected grid "
+                            f"{xx.shape}",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+                        warned_shape_mismatches.add(var_name)
                     continue
                 frame[_normalize_h5_var_name(var_name)] = data.ravel()
 
