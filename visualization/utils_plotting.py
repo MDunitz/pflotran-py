@@ -115,9 +115,7 @@ def snapshot_times(df):
     cols = ["Time Index"]
     if time_col != "Time Index":
         cols.append(time_col)
-    rows = (
-        df[cols].drop_duplicates(subset=["Time Index"]).sort_values("Time Index")
-    )
+    rows = df[cols].drop_duplicates(subset=["Time Index"]).sort_values("Time Index")
     return list(zip(rows["Time Index"].tolist(), rows[time_col].tolist()))
 
 
