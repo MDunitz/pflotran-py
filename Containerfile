@@ -5,9 +5,13 @@
 #
 # Build:
 #   docker build -t pflotran-py-test -f Containerfile .
+#   podman build -t pflotran-py-test -f Containerfile .
 #
 # Run integration tests:
+#   ./scripts/run_integration.sh
 #   docker run --rm -v $(pwd):/work -w /work pflotran-py-test \
+#       pytest tests/ -v --tb=short -m integration
+#   podman run --rm -v $(pwd):/work:Z -w /work pflotran-py-test \
 #       pytest tests/ -v --tb=short -m integration
 
 FROM pshuai/jupyter-pflotran-multiplatform:base_v6

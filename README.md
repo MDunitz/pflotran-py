@@ -93,35 +93,54 @@ podman build -t pflotran-py-test -f Containerfile .
 **Stock PFLOTRAN tests** (no custom sandboxes, e.g. deck `3_smaller_grid.in`):
 
 ```bash
+# Docker
 docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/test_docker_e2e.py -v --tb=short
+
+# Podman (add :Z on SELinux hosts)
+podman run --rm -v "$(pwd)":/work:Z -w /work pflotran-py-test \
   pytest tests/test_docker_e2e.py -v --tb=short
 ```
 
 **Custom sandbox tests** (AWINHIBIT decks 7–10):
 
 ```bash
+# Docker
 docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  pytest tests/test_custom_docker_e2e.py -v --tb=short
+
+# Podman
+podman run --rm -v "$(pwd)":/work:Z -w /work pflotran-py-test \
   pytest tests/test_custom_docker_e2e.py -v --tb=short
 ```
 
 **All integration tests:**
 
 ```bash
-docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
-  pytest tests/ -v --tb=short -m integration
+# Auto-detect docker or podman (recommended)
+./scripts/run_integration.sh
+
+# Or pick explicitly
+./scripts/run_integration.sh docker
+./scripts/run_integration.sh podman
 ```
 
 **Run the full custom-sandbox pipeline** (prep deck, simulate, extract, plot):
 
 ```bash
+# Docker
 docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
+  python3 tests/test_custom_docker_e2e.py
+
+# Podman
+podman run --rm -v "$(pwd)":/work:Z -w /work pflotran-py-test \
   python3 tests/test_custom_docker_e2e.py
 ```
 
 Output lands in `tests/custom_e2e_output/` (CSV + PNGs).
 
-On Linux with Podman, add `:Z` to the volume mount for SELinux:
-`-v "$(pwd)":/work:Z`.
+On Linux with Podman, `:Z` on the volume mount is required for SELinux
+(Fedora/RHEL). It is harmless on hosts without SELinux.
 
 ### Option B: Custom sandbox build (manual, inside base image)
 
@@ -398,7 +417,7 @@ This repo uses GitHub Actions on all PRs against `main`:
 | Workflow | What it runs |
 |----------|--------------|
 | `ci.yml` | `black`, `flake8`, `pytest -m "not integration"` (no PFLOTRAN needed) |
-| `integration.yml` | Builds `Containerfile`, runs `pytest -m integration` (real PFLOTRAN simulations) |
+| `integration.yml` | Builds `Containerfile` and runs `pytest -m integration` with **both Docker and Podman** (matrix) |
 
 ### Running checks locally
 
@@ -409,12 +428,12 @@ flake8
 pytest -m "not integration"    # fast: no PFLOTRAN binary required
 ```
 
-Integration tests (require Docker — see [Running PFLOTRAN](#running-pflotran)):
+Integration tests (require Docker or Podman — see [Running PFLOTRAN](#running-pflotran)):
 
 ```bash
-docker build -t pflotran-py-test -f Containerfile .
-docker run --rm -v "$(pwd)":/work -w /work pflotran-py-test \
-  pytest tests/ -v --tb=short -m integration
+./scripts/run_integration.sh          # auto-detects docker or podman
+./scripts/run_integration.sh docker
+./scripts/run_integration.sh podman
 ```
 
 ---
