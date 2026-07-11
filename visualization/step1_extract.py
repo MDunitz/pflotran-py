@@ -9,11 +9,14 @@
 #  1) Install and import dependencies
 # ##################################################################
 import os
+import re
 import glob
+import warnings
 
 import pandas as pd
 
 import step1_extract_hdf5
+from shared_utils import TIME_COL, time_to_days
 
 # Re-export HDF5 helpers for callers that import from step1_extract.
 extract_pflotran_data_hdf5 = step1_extract_hdf5.extract_pflotran_data_hdf5
@@ -35,6 +38,39 @@ def extract_plfotran_tecplot_variable_names(filepath):
                 ]
                 return variables
     return []
+
+
+def parse_tecplot_time_days(filepath):
+    """Parse simulation time in days from a Tecplot snapshot header.
+
+    Prefers ``TITLE = "  1.00000E+00 [d]"`` (value + unit). Falls back to
+    ``SOLUTIONTIME=...`` treated as days if no unit is present.
+    """
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line.startswith("TITLE"):
+            match = re.search(
+                r"([0-9]+(?:\.[0-9]*)?(?:[eE][+-]?\d+)?)\s*\[([A-Za-z]+)\]",
+                line,
+            )
+            if match:
+                return time_to_days(match.group(1), match.group(2))
+
+    for line in lines:
+        if "SOLUTIONTIME" in line:
+            match = re.search(r"SOLUTIONTIME\s*=\s*([0-9.eE+-]+)", line)
+            if match:
+                warnings.warn(
+                    f"{filepath}: no time unit in TITLE; "
+                    f"treating SOLUTIONTIME={match.group(1)} as days",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return float(match.group(1))
+
+    raise ValueError(f"Could not parse simulation time from {filepath}")
 
 
 # ##################################################################
@@ -90,6 +126,7 @@ def extract_pflotran_data_tec(
 
         df = read_tec_file(filepath)
         df["Time Index"] = i
+        df[TIME_COL] = parse_tecplot_time_days(filepath)
         all_data.append(df)
         files_read += 1
 

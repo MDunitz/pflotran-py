@@ -223,14 +223,26 @@ def parse_expected_snapshots(deck_path):
 
 def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     os.makedirs(output_dir, exist_ok=True)
-    times = sorted(flux_df["Time Index"].unique())
+    time_col = shared_utils.time_axis_column(flux_df)
+    cols = ["Time Index"]
+    if time_col != "Time Index":
+        cols.append(time_col)
+    snapshots = (
+        flux_df[cols].drop_duplicates(subset=["Time Index"]).sort_values("Time Index")
+    )
+    times = list(zip(snapshots["Time Index"], snapshots[time_col]))
     images = {}
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for species, col in species_map.items():
-        means = [flux_df.loc[flux_df["Time Index"] == t, col].mean() for t in times]
-        ax.plot(times, means, marker="o", label=f"{species} mean")
-    ax.set_xlabel("Time (days)")
+        means = [
+            flux_df.loc[flux_df["Time Index"] == t_idx, col].mean()
+            for t_idx, _ in times
+        ]
+        ax.plot(
+            [t_days for _, t_days in times], means, marker="o", label=f"{species} mean"
+        )
+    ax.set_xlabel(time_col)
     ax.set_ylabel("Concentration [M]")
     ax.set_title("Mean aqueous concentration vs time")
     ax.legend()
@@ -244,9 +256,17 @@ def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     fig, ax = plt.subplots(figsize=(8, 5))
     for species in species_map:
         mag_col = shared_utils.flux_col(species, "magnitude")
-        means = [flux_df.loc[flux_df["Time Index"] == t, mag_col].mean() for t in times]
-        ax.plot(times, means, marker="s", label=f"{species} |J| mean")
-    ax.set_xlabel("Time (days)")
+        means = [
+            flux_df.loc[flux_df["Time Index"] == t_idx, mag_col].mean()
+            for t_idx, _ in times
+        ]
+        ax.plot(
+            [t_days for _, t_days in times],
+            means,
+            marker="s",
+            label=f"{species} |J| mean",
+        )
+    ax.set_xlabel(time_col)
     ax.set_ylabel(f"Diffusive flux magnitude [{shared_utils.FLUX_UNITS}]")
     ax.set_title("Mean diffusive flux magnitude vs time")
     ax.legend()
@@ -257,8 +277,8 @@ def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     plt.close(fig)
     images["flux_magnitude_timeseries"] = path
 
-    final_t = times[-1]
-    final = flux_df[flux_df["Time Index"] == final_t]
+    final_idx, final_days = times[-1]
+    final = flux_df[flux_df["Time Index"] == final_idx]
     z_mid = sorted(final["Z [m]"].unique())[len(final["Z [m]"].unique()) // 2]
     layer = final[np.isclose(final["Z [m]"], z_mid)]
     fig, ax = plt.subplots(figsize=(7, 6))
@@ -273,7 +293,7 @@ def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     fig.colorbar(sc, ax=ax, label="Free CH4(aq) [M]")
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
-    ax.set_title(f"CH4 at z={z_mid:g} m, t={final_t} d")
+    ax.set_title(f"CH4 at z={z_mid:g} m, t={final_days:g} d")
     path = os.path.join(output_dir, "ch4_final_zslice.png")
     fig.tight_layout()
     fig.savefig(path, dpi=120)

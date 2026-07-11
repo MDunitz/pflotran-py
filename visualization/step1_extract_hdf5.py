@@ -2,11 +2,14 @@
 
 import glob
 import os
+import re
 import warnings
 
 import h5py
 import numpy as np
 import pandas as pd
+
+from shared_utils import TIME_COL, time_to_days
 
 # PFLOTRAN writes a single .h5 file containing every snapshot as a
 # "Time:  <value> <unit>" group. Each group holds (nx, ny, nz) arrays named
@@ -35,26 +38,30 @@ def _normalize_h5_var_name(name):
     return name
 
 
+def parse_h5_time_days(group_key):
+    """Parse ``Time:  1.00000E+00 d`` into simulation time in days."""
+    match = re.search(
+        r"Time:\s*([0-9]+(?:\.[0-9]*)?(?:[eE][+-]?\d+)?)\s*([A-Za-z]+)",
+        group_key,
+    )
+    if not match:
+        raise ValueError(f"Could not parse simulation time from {group_key!r}")
+    return time_to_days(match.group(1), match.group(2))
+
+
 def _h5_time_groups(h5file):
-    """Return time-group keys sorted by their numeric time value."""
-
-    def time_value(key):
-        # key looks like "Time:  1.00000E+00 d"
-        try:
-            return float(key.split(":", 1)[1].split()[0])
-        except (IndexError, ValueError):
-            return float("inf")
-
+    """Return time-group keys sorted by simulation time in days."""
     groups = [k for k in h5file.keys() if k.startswith("Time:")]
-    return sorted(groups, key=time_value)
+    return sorted(groups, key=parse_h5_time_days)
 
 
 def extract_pflotran_data_hdf5(filepath, verbose=False):
     """Extract every snapshot from a PFLOTRAN HDF5 output file.
 
     Returns a DataFrame with X/Y/Z [m] cell-center columns, a "Time Index"
-    column (0-based, ordered by simulation time), and one column per output
-    variable using Tecplot-compatible names.
+    column (0-based, ordered by simulation time), a ``Time [d]`` column with
+    real simulation time in days, and one column per output variable using
+    Tecplot-compatible names.
     """
     all_data = []
     with h5py.File(filepath, "r") as h5:
@@ -77,6 +84,7 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
 
         for time_idx, gname in enumerate(time_groups):
             group = h5[gname]
+            time_days = parse_h5_time_days(gname)
             frame = {
                 "X [m]": xx.ravel(),
                 "Y [m]": yy.ravel(),
@@ -102,6 +110,7 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
 
             df = pd.DataFrame(frame)
             df["Time Index"] = time_idx
+            df[TIME_COL] = time_days
             all_data.append(df)
 
     if not all_data:

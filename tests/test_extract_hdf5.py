@@ -90,6 +90,22 @@ def test_extract_hdf5_values_by_snapshot(sample_h5):
     assert t1 == pytest.approx(2.0)
 
 
+def test_extract_hdf5_stores_time_in_days(sample_h5):
+    df = hdf5_extract.extract_pflotran_data_hdf5(str(sample_h5))
+
+    assert "Time [d]" in df.columns
+    assert set(df["Time [d]"].unique()) == {0.0, 1.0}
+
+
+def test_parse_h5_time_days_converts_years():
+    assert hdf5_extract.parse_h5_time_days("Time:  1.00000E+00 y") == pytest.approx(
+        365.25
+    )
+    assert hdf5_extract.parse_h5_time_days("Time:  2.00000E+00 yr") == pytest.approx(
+        730.5
+    )
+
+
 def test_extract_hdf5_no_snapshots_raises(tmp_path):
     path = tmp_path / "no_times.h5"
     with h5py.File(path, "w") as h5:
