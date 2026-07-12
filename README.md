@@ -10,7 +10,7 @@ Simulation of microbial redox networks (methanogenesis, sulfate reduction, iron 
 ├── Containerfile             ← Docker/Podman image with custom-sandbox PFLOTRAN
 ├── scripts/                  ← PFLOTRAN sandbox patch + build scripts
 ├── generator/                ← Python code to produce PFLOTRAN .in files
-├── sandbox/                  ← Custom Fortran 90 reaction modules (water activity inhibition)
+├── sandbox/                  ← Custom Fortran 90 reaction modules + custom-sandbox notebook
 ├── visualization/            ← Post-processing pipeline (extract → plot → gradient/flux)
 ├── batch/                    ← Batch file generation + inhibition diagnostics
 ├── sample_data/              ← Example PFLOTRAN Tecplot output files
@@ -174,6 +174,9 @@ python3 scripts/patch_pflotran_sandboxes.py \
 cd /path/to/pflotran/src/pflotran && make clean && make pflotran
 ```
 
+To also install a notebook-generated custom sandbox, add
+`--extra-sandbox-dir sandbox/custom_<timestamp>` (repeatable).
+
 ---
 
 ## Installing PFLOTRAN
@@ -285,6 +288,27 @@ Fortran 90 modules that extend PFLOTRAN with water-activity-dependent inhibition
 | `reaction_sandbox_awinhibitmethyl.F90` | Methylotrophic | CH₃OH → ¾CH₄ + ¼CO₂ + ½H₂O |
 
 Each implements threshold and smoothstep inhibition modes. `hanford.dat` is the thermodynamic database.
+
+#### Generate your own sandbox (notebook)
+
+Use [`sandbox/create_custom_sandbox.ipynb`](sandbox/create_custom_sandbox.ipynb) to:
+
+1. Search / audit species against `sandbox/hanford.dat`
+2. Add missing basis species (`a0`, charge, molecular weight)
+3. Enter stoichiometry and rate / water-activity defaults
+4. Emit `sandbox/custom_<timestamp>/` with a tailored `hanford.dat`, `reaction_sandbox_*.F90`, `.in` snippet, and install notes
+
+Logic lives in [`sandbox/custom_sandbox_gen.py`](sandbox/custom_sandbox_gen.py) (callable without the notebook). Generated `custom_*` folders are gitignored.
+
+Install a generated module into a PFLOTRAN tree:
+
+```bash
+python3 scripts/patch_pflotran_sandboxes.py \
+  --pflotran-src /path/to/pflotran/src/pflotran \
+  --sandbox-dir sandbox/ \
+  --extra-sandbox-dir sandbox/custom_YYYYMMDD_HHMMSS
+cd /path/to/pflotran/src/pflotran && make clean && make pflotran
+```
 
 #### Compiling reaction sandboxes into PFLOTRAN
 
