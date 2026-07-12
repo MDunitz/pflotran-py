@@ -9,7 +9,18 @@
 #  1) Install and import dependencies
 # ##################################################################
 import os
+import re
+import glob
+import warnings
+
 import pandas as pd
+
+import step1_extract_hdf5
+from shared_utils import TIME_COL, time_to_days
+
+# Re-export HDF5 helpers for callers that import from step1_extract.
+extract_pflotran_data_hdf5 = step1_extract_hdf5.extract_pflotran_data_hdf5
+find_hdf5_output = step1_extract_hdf5.find_hdf5_output
 
 
 # ##################################################################
@@ -27,6 +38,39 @@ def extract_plfotran_tecplot_variable_names(filepath):
                 ]
                 return variables
     return []
+
+
+def parse_tecplot_time_days(filepath):
+    """Parse simulation time in days from a Tecplot snapshot header.
+
+    Prefers ``TITLE = "  1.00000E+00 [d]"`` (value + unit). Falls back to
+    ``SOLUTIONTIME=...`` treated as days if no unit is present.
+    """
+    with open(filepath, "r") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line.startswith("TITLE"):
+            match = re.search(
+                r"([0-9]+(?:\.[0-9]*)?(?:[eE][+-]?\d+)?)\s*\[([A-Za-z]+)\]",
+                line,
+            )
+            if match:
+                return time_to_days(match.group(1), match.group(2))
+
+    for line in lines:
+        if "SOLUTIONTIME" in line:
+            match = re.search(r"SOLUTIONTIME\s*=\s*([0-9.eE+-]+)", line)
+            if match:
+                warnings.warn(
+                    f"{filepath}: no time unit in TITLE; "
+                    f"treating SOLUTIONTIME={match.group(1)} as days",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return float(match.group(1))
+
+    raise ValueError(f"Could not parse simulation time from {filepath}")
 
 
 # ##################################################################
@@ -82,6 +126,7 @@ def extract_pflotran_data_tec(
 
         df = read_tec_file(filepath)
         df["Time Index"] = i
+        df[TIME_COL] = parse_tecplot_time_days(filepath)
         all_data.append(df)
         files_read += 1
 
@@ -89,6 +134,67 @@ def extract_pflotran_data_tec(
     full_df = pd.concat(all_data, ignore_index=True)
 
     return full_df
+
+
+# ##################################################################
+#  4c) Auto-detecting extractor (TEC or HDF5)
+# ##################################################################
+def extract_pflotran_data(
+    data_dir=".",
+    file_name_template="{prefix}-{:03d}.tec",
+    prefix="sim",
+    data_format="auto",
+    verbose=False,
+):
+    """Extract PFLOTRAN output, auto-selecting the Tecplot or HDF5 reader.
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing PFLOTRAN output.
+    file_name_template : str
+        Template for Tecplot snapshot files. If it contains ``{prefix}`` it is
+        formatted with ``prefix`` first.
+    prefix : str
+        Simulation prefix (``-input_prefix``), used to locate files.
+    data_format : {"auto", "tec", "hdf5"}
+        Output format. "auto" detects by looking for files on disk.
+    """
+    tec_template = file_name_template
+    if "{prefix}" in tec_template:
+        tec_template = tec_template.replace("{prefix}", prefix)
+
+    resolved = data_format
+    if resolved == "auto":
+        tec_files = sorted(
+            glob.glob(os.path.join(data_dir, f"{prefix}-[0-9][0-9][0-9].tec"))
+        )
+        if tec_files:
+            resolved = "tec"
+        elif find_hdf5_output(data_dir, prefix=prefix) is not None:
+            resolved = "hdf5"
+        else:
+            raise FileNotFoundError(
+                f"No PFLOTRAN .tec or .h5 output found in {data_dir}"
+            )
+
+    if resolved == "tec":
+        n_files = len(
+            glob.glob(os.path.join(data_dir, f"{prefix}-[0-9][0-9][0-9].tec"))
+        )
+        return extract_pflotran_data_tec(
+            data_dir=data_dir,
+            file_name_template=tec_template,
+            n_files=n_files,
+            verbose=verbose,
+        )
+    elif resolved == "hdf5":
+        h5_path = find_hdf5_output(data_dir, prefix=prefix)
+        if h5_path is None:
+            raise FileNotFoundError(f"No PFLOTRAN .h5 output found in {data_dir}")
+        return extract_pflotran_data_hdf5(h5_path, verbose=verbose)
+    else:
+        raise ValueError(f"Unknown data_format: {data_format!r}")
 
 
 # ##################################################################
@@ -106,17 +212,19 @@ def save_data(df, filename="pflotran_data.pkl"):
 #  0) Main
 # ##################################################################
 def main(data_format, data_dir, file_name_template, n_files):
-    data_dir = data_dir
-    file_name_template = file_name_template
-    n_files = n_files
-
     if data_format == "tec":
         print("\nExtracting data from tecplot files...")
         full_df = extract_pflotran_data_tec(
             data_dir=data_dir, file_name_template=file_name_template, n_files=n_files
         )
+    elif data_format == "hdf5":
+        print("\nExtracting data from hdf5 file...")
+        h5_path = find_hdf5_output(data_dir)
+        if h5_path is None:
+            raise FileNotFoundError(f"No PFLOTRAN .h5 output found in {data_dir}")
+        full_df = extract_pflotran_data_hdf5(h5_path)
     else:
-        print("\nExtracting data from hdf5 files is not yet implemented.")
+        raise ValueError(f"Unknown data_format: {data_format!r}")
 
     print("\nSaving data...")
     save_data(full_df, "pflotran_data.pkl")

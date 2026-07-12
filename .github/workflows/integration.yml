@@ -10,15 +10,36 @@ on:
 jobs:
   pflotran-integration:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Docker is native on GitHub-hosted runners; Podman is installed below.
+        runtime: [docker, podman]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run tests in PFLOTRAN container (Podman)
+      - name: Install Podman
+        if: matrix.runtime == 'podman'
         run: |
-          podman run --rm \
-            -v ${{ github.workspace }}:/work:Z \
+          sudo apt-get update
+          sudo apt-get install -y podman
+          podman --version
+
+      - name: Build PFLOTRAN test image (${{ matrix.runtime }})
+        run: ${{ matrix.runtime }} build -t pflotran-py-test -f Containerfile .
+
+      - name: Run integration tests in container (${{ matrix.runtime }})
+        run: |
+          # Podman on SELinux hosts needs :Z; Docker ignores unknown options poorly,
+          # so only append :Z for Podman.
+          if [ "${{ matrix.runtime }}" = "podman" ]; then
+            VOL="${{ github.workspace }}:/work:Z"
+          else
+            VOL="${{ github.workspace }}:/work"
+          fi
+          ${{ matrix.runtime }} run --rm \
+            -v "$VOL" \
             -w /work \
-            pshuai/jupyter-pflotran-multiplatform:base_v6 \
-            bash -c "pip install --no-cache-dir -r requirements.txt && \
-                     python3 -m pytest tests/ -v --tb=short"
+            pflotran-py-test \
+            pytest tests/ -v --tb=short -m integration

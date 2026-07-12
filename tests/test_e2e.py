@@ -76,6 +76,12 @@ def test_extraction_has_time_index(extracted_df):
     assert set(extracted_df["Time Index"].unique()) == set(range(N_FILES))
 
 
+def test_extraction_has_simulation_time_days(extracted_df):
+    assert "Time [d]" in extracted_df.columns
+    # sample_data snapshots are at 0,1,2,3,4,5 days
+    assert set(extracted_df["Time [d]"].unique()) == {0.0, 1.0, 2.0, 3.0, 4.0, 5.0}
+
+
 def test_extraction_has_spatial_columns(extracted_df):
     for col in ["X [m]", "Y [m]", "Z [m]"]:
         assert col in extracted_df.columns

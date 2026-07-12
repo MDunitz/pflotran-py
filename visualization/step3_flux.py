@@ -25,6 +25,8 @@ from shared_utils import (
     flux_tooltips,
     GRADIENT_UNITS,
     FLUX_UNITS,
+    TIME_COL,
+    time_axis_column,
 )
 
 # Default species mapping: short name → DataFrame column
@@ -154,7 +156,12 @@ def create_surface_visualization(
             vmax = surface_data[mag_col].max()
 
             p = figure(
-                title=f"{species} {quantity} [{units}] — t={time_idx}",
+                title=(
+                    f"{species} {quantity} [{units}] — "
+                    f"t={surface_data[time_axis_column(surface_data)].iloc[0]:g} d"
+                    if TIME_COL in surface_data.columns
+                    else f"{species} {quantity} [{units}] — t={time_idx}"
+                ),
                 x_axis_label="X [m]",
                 y_axis_label="Y [m]",
                 width=400,

@@ -24,6 +24,7 @@ from shared_utils import (
     flux_tooltips,
     GRADIENT_UNITS,
     FLUX_UNITS,
+    time_axis_column,
 )
 
 DEFAULT_SPECIES_MAP = {
@@ -51,7 +52,8 @@ def extract_point_time_series(df, target_x, target_y, target_z, tolerance=1e-6):
         & (np.abs(df["Y [m]"] - target_y) < tolerance)
         & (np.abs(df["Z [m]"] - target_z) < tolerance)
     ].copy()
-    return point_data.sort_values("Time Index")
+    sort_col = time_axis_column(point_data)
+    return point_data.sort_values(sort_col)
 
 
 def _col(species, component, use_flux):
@@ -65,9 +67,9 @@ def _units(use_flux):
     return FLUX_UNITS if use_flux else GRADIENT_UNITS
 
 
-def _make_hover(species_list, conc_cols, renderers, use_flux):
+def _make_hover(species_list, conc_cols, renderers, use_flux, time_col):
     """Build hover tooltip from linked shared_utils functions."""
-    tips = [("Time Index", "@{Time Index}")]
+    tips = [(time_col, f"@{{{time_col}}}")]
     for species in species_list:
         getter = flux_tooltips if use_flux else gradient_tooltips
         tips.extend(getter(species))
@@ -90,6 +92,7 @@ def create_time_series_plot(
     species_list = list(species_map.keys())
     units = _units(use_flux)
     quantity = "Flux" if use_flux else "Gradient"
+    time_col = time_axis_column(point_data)
 
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, output_filename)
@@ -100,7 +103,7 @@ def create_time_series_plot(
     # Magnitude plot
     p = figure(
         title=f"{quantity} Magnitude — ({target_x:.3f}, {target_y:.3f}, {target_z:.3f})",
-        x_axis_label="Time Index",
+        x_axis_label=time_col,
         y_axis_label=f"{quantity} [{units}]",
         width=1000,
         height=500,
@@ -113,7 +116,7 @@ def create_time_series_plot(
         mag = _col(species, "magnitude", use_flux)
         color = colors.get(species, "gray")
         line = p.line(
-            "Time Index",
+            time_col,
             mag,
             source=source,
             line_width=3,
@@ -122,11 +125,11 @@ def create_time_series_plot(
             legend_label=f"{species} |{quantity[0]}|",
         )
         circles = p.scatter(
-            "Time Index", mag, source=source, size=6, color=color, alpha=0.8
+            time_col, mag, source=source, size=6, color=color, alpha=0.8
         )
         renderers.extend([line, circles])
 
-    hover = _make_hover(species_list, species_map, renderers, use_flux)
+    hover = _make_hover(species_list, species_map, renderers, use_flux, time_col)
     p.add_tools(hover)
     p.legend.location = "top_left"
     p.legend.click_policy = "hide"
@@ -139,7 +142,7 @@ def create_time_series_plot(
     # Component plot
     p2 = figure(
         title=f"{quantity} Components — ({target_x:.3f}, {target_y:.3f}, {target_z:.3f})",
-        x_axis_label="Time Index",
+        x_axis_label=time_col,
         y_axis_label=f"{quantity} component [{units}]",
         width=1000,
         height=350,
@@ -156,7 +159,7 @@ def create_time_series_plot(
             col_name = _col(species, comp, use_flux)
             dash = "dashed" if species == "CH4" else "solid"
             p2.line(
-                "Time Index",
+                time_col,
                 col_name,
                 source=source,
                 line_width=2,

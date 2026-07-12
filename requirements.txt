@@ -9,6 +9,7 @@ pandas
 numpy
 scipy
 tqdm
+h5py  # PFLOTRAN HDF5 output extraction
 
 # Development
 black
