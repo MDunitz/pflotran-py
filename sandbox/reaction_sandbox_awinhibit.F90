@@ -26,6 +26,11 @@ module Reaction_Sandbox_AWInhibit_class
     PetscReal :: activation_energy
     PetscReal :: reference_temperature
 
+    ! Monod half-saturation constants [mol/L] for the electron donor (H2)
+    ! and acceptor (HCO3-). Rate uses Monod terms C/(K+C), not mass action.
+    PetscReal :: half_saturation_h2
+    PetscReal :: half_saturation_hco3
+
     ! Species indices
     PetscInt :: i_h2
     PetscInt :: i_hco3
@@ -64,6 +69,8 @@ function AWInhibitCreate()
   AWInhibitCreate%rate_constant = UNINITIALIZED_DOUBLE
   AWInhibitCreate%activation_energy = UNINITIALIZED_DOUBLE
   AWInhibitCreate%reference_temperature = UNINITIALIZED_DOUBLE
+  AWInhibitCreate%half_saturation_h2 = UNINITIALIZED_DOUBLE
+  AWInhibitCreate%half_saturation_hco3 = UNINITIALIZED_DOUBLE
   
   ! Species indices
   AWInhibitCreate%i_h2 = UNINITIALIZED_INTEGER
@@ -119,8 +126,23 @@ subroutine AWInhibitRead(this,input,option)
       case('RATE_CONSTANT')
         call InputReadDouble(input,option,this%rate_constant)
         call InputErrorMsg(input,option,'rate_constant',error_string)
-        call InputReadAndConvertUnits(input,this%rate_constant,'mol/m^3-sec',&
+        ! mol/L-sec: k multiplies dimensionless Monod terms, then *L_water[L]
+        ! -> mol/sec residual. (Was mol/m^3-sec, which is only correct when the
+        ! multipliers are dimensionless AND the volume is supplied in m^3.)
+        call InputReadAndConvertUnits(input,this%rate_constant,'mol/L-sec',&
                         trim(error_string)//',rate_constant',option)
+
+      case('HALF_SATURATION_H2')
+        call InputReadDouble(input,option,this%half_saturation_h2)
+        call InputErrorMsg(input,option,'half_saturation_h2',error_string)
+        call InputReadAndConvertUnits(input,this%half_saturation_h2,'mol/L',&
+                        trim(error_string)//',half_saturation_h2',option)
+
+      case('HALF_SATURATION_HCO3')
+        call InputReadDouble(input,option,this%half_saturation_hco3)
+        call InputErrorMsg(input,option,'half_saturation_hco3',error_string)
+        call InputReadAndConvertUnits(input,this%half_saturation_hco3,'mol/L',&
+                        trim(error_string)//',half_saturation_hco3',option)
 
       case('INHIBITION_TYPE')
         call InputReadWord(input,option,word,PETSC_TRUE)
@@ -178,6 +200,16 @@ subroutine AWInhibitSetup(this,reaction,option)
   ! Check that rate constant is provided
   if (Uninitialized(this%rate_constant)) then
     option%io_buffer = 'RATE_CONSTANT must be provided for AWInhibit reaction'
+    call PrintErrMsg(option)
+  endif
+
+  ! Check that Monod half-saturation constants are provided
+  if (Uninitialized(this%half_saturation_h2)) then
+    option%io_buffer = 'HALF_SATURATION_H2 must be provided for AWInhibit reaction'
+    call PrintErrMsg(option)
+  endif
+  if (Uninitialized(this%half_saturation_hco3)) then
+    option%io_buffer = 'HALF_SATURATION_HCO3 must be provided for AWInhibit reaction'
     call PrintErrMsg(option)
   endif
 
@@ -243,6 +275,7 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
   PetscReal :: water_activity, aw_inhibition, tempreal
   PetscReal :: rate_constant
   PetscReal :: reaction_rate
+  PetscReal :: monod_h2, monod_hco3
 
   ! Concentrations
   PetscReal :: C_h2, C_hco3, C_h, C_ch4
@@ -291,12 +324,24 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
       endif
   end select
 
-  ! Calculate reaction rate: 4 H2(aq) + HCO3- + H+ -> CH4(aq) + 3 H2O
-  ! Rate law assumes first order in each reactant
-  reaction_rate = rate_constant * (C_h2**4) * C_hco3 * C_h * aw_inhibition
-  
-  ! Apply water activity inhibition
-  reaction_rate = reaction_rate * L_water  ! Convert to mol/sec
+  ! Reaction: 4 H2(aq) + HCO3- + H+ -> CH4(aq) + 3 H2O
+  !
+  ! Dual-Monod microbial rate law with water-activity inhibition:
+  !   R_vol = k * [C_h2/(K_h2 + C_h2)] * [C_hco3/(K_hco3 + C_hco3)] * I_aw
+  ! where
+  !   k       = rate_constant                 [mol/L-sec]
+  !   C_i     = aqueous activity of species i  [mol/L]
+  !   K_i     = half_saturation_i              [mol/L]
+  !   Monod terms and I_aw are dimensionless
+  ! Stoichiometric coefficients (4 for H2, etc.) are applied in the residual
+  ! update below, NOT as rate-law exponents. H+ is consumed stoichiometrically
+  ! (pH effect) but is not a Monod substrate term.
+  monod_h2 = C_h2 / (this%half_saturation_h2 + C_h2)
+  monod_hco3 = C_hco3 / (this%half_saturation_hco3 + C_hco3)
+  reaction_rate = rate_constant * monod_h2 * monod_hco3 * aw_inhibition
+
+  ! R_vol [mol/L-sec] * L_water [L] -> mol/sec
+  reaction_rate = reaction_rate * L_water
 
   ! Update residuals (negative stoichiometry for reactants, positive for products)
   ! 4 H2(aq) consumed
