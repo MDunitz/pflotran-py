@@ -17,7 +17,7 @@ import argparse
 
 # Add the master_input_generator directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "generator"))
-from pflotran_generator import PFLOTRANGenerator  # noqa: E402
+from pflotran_py.generator import PFLOTRANGenerator  # noqa: E402
 
 # Seawater baseline concentrations [mol/L] at 1× salinity
 # Ref: Millero (2013) Chemical Oceanography, Table 2.1
