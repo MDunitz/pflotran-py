@@ -22,7 +22,7 @@ Sources:
 
 from datetime import datetime
 
-from pflotran_templates import (
+from .pflotran_templates import (
     HEADER,
     PRIMARY_SPECIES,
     SECONDARY_SPECIES,

@@ -37,15 +37,13 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "generator"))
-from pflotran_generator import PFLOTRANGenerator  # noqa: E402
+from pflotran_py.generator import PFLOTRANGenerator
 
 # Import seawater scaling from reproducible_varconc
 # create_modified_files is in the same directory
-from create_modified_files import scale_seawater  # noqa: E402
+from create_modified_files import scale_seawater
 
 VARIANTS = {
     "A_cl_only": {"enable_cl_inhibition": True, "enable_aw_sandbox": False},

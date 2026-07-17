@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pflotran-py"
+version = "0.1.0"
+description = "General PFLOTRAN input-deck generator, sandbox templates, and reactive-transport post-processing."
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "h5py",
+    "bokeh",
+    "plotly",
+    "matplotlib",
+    "tqdm",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
