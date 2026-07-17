@@ -7,19 +7,15 @@ reasonable. Does NOT require a PFLOTRAN binary -- uses the committed
 """
 
 import os
-import sys
 
 import numpy as np
 import pandas as pd
 import pytest
 
-# Repo root so imports resolve
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
-sys.path.insert(0, REPO_ROOT)
-sys.path.insert(0, os.path.join(REPO_ROOT, "visualization"))
 
-import step1_extract  # noqa: E402
-import shared_utils  # noqa: E402
+from pflotran_py.visualization import step1_extract  # noqa: E402
+from pflotran_py.visualization import shared_utils  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────
 

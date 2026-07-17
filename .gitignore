@@ -3,3 +3,5 @@ tests/e2e_output/
 tests/custom_e2e_output/
 tests/custom_e2e_hdf5_output/
 build/
+.venv/
+*.egg-info/

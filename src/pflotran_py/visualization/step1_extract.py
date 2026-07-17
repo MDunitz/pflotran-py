@@ -15,8 +15,8 @@ import warnings
 
 import pandas as pd
 
-import step1_extract_hdf5
-from shared_utils import TIME_COL, time_to_days
+from . import step1_extract_hdf5
+from .shared_utils import TIME_COL, time_to_days
 
 # Re-export HDF5 helpers for callers that import from step1_extract.
 extract_pflotran_data_hdf5 = step1_extract_hdf5.extract_pflotran_data_hdf5

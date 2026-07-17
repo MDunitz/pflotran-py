@@ -15,7 +15,7 @@ from bokeh.models import HoverTool, ColumnDataSource
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Viridis256
 
-from shared_utils import (
+from .shared_utils import (
     load_data,
     calculate_gradients,
     convert_to_flux,

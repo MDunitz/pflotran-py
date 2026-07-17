@@ -9,9 +9,10 @@ Simulation of microbial redox networks (methanogenesis, sulfate reduction, iron 
 ├── requirements.txt          ← Python dependencies
 ├── Containerfile             ← Docker/Podman image with custom-sandbox PFLOTRAN
 ├── scripts/                  ← PFLOTRAN sandbox patch + build scripts
-├── generator/                ← Python code to produce PFLOTRAN .in files
 ├── sandbox/                  ← Custom Fortran 90 reaction modules (water activity inhibition)
-├── visualization/            ← Post-processing pipeline (extract → plot → gradient/flux)
+├── src/pflotran_py/          ← Installable package
+│   ├── generator/            ← Python code to produce PFLOTRAN .in files
+│   └── visualization/        ← Post-processing pipeline (extract → plot → gradient/flux)
 ├── batch/                    ← Batch file generation + inhibition diagnostics
 ├── sample_data/              ← Example PFLOTRAN Tecplot output files
 ├── reference/                ← Historical/reference input decks
@@ -54,8 +55,7 @@ cd batch/
 ### 4. Post-process and visualize results
 
 ```bash
-cd visualization/
-python step_orchestra.py  # runs step1 → step2 → step3 → step4
+python -m pflotran_py.visualization.step_orchestra  # runs step1 → step2 → step3 → step4
 ```
 
 ---
@@ -354,9 +354,9 @@ To add a sandbox (e.g. `awinhibit`) to your PFLOTRAN build:
 
 Constants in the reaction sandboxes can be changed without recompiling PFLOTRAN — they're read from the `.in` file at runtime.
 
-### visualization/
+### src/pflotran_py/visualization/
 
-Post-processing pipeline for PFLOTRAN Tecplot output:
+Post-processing pipeline for PFLOTRAN Tecplot output (importable as `pflotran_py.visualization`):
 
 | Step | Script | Output |
 |------|--------|--------|
@@ -371,7 +371,7 @@ Post-processing pipeline for PFLOTRAN Tecplot output:
 - Species-specific diffusion coefficients from Boudreau (1997)
 - Consistent column naming and Bokeh tooltip generation
 
-`step_orchestra.py` runs the full pipeline with configurable temperature (default 8°C) and flux computation. By default it reads sample data from `../sample_data/`.
+`step_orchestra.py` runs the full pipeline with configurable temperature (default 8°C) and flux computation; run it as `python -m pflotran_py.visualization.step_orchestra`. By default it reads sample data from `sample_data/`.
 
 ### sample_data/
 
@@ -490,8 +490,7 @@ Runs all `.in` files in the directory sequentially (not parallel). Skips failure
 ### Visualizing single PFLOTRAN runs
 
 ```bash
-cd visualization/
-python step_orchestra.py
+python -m pflotran_py.visualization.step_orchestra
 ```
 
 Edit the config at the top of `step_orchestra.py` to point to your data directory, set `tec` or `hdf5` format, and choose species. Set `verbose=True` in individual step functions for debugging. Opens three HTML files.

@@ -16,12 +16,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_VIZ_DIR = os.path.join(REPO_ROOT, "visualization")
-if _VIZ_DIR not in sys.path:
-    sys.path.insert(0, _VIZ_DIR)
 
-import step1_extract  # noqa: E402
-import shared_utils  # noqa: E402
+from pflotran_py.visualization import step1_extract  # noqa: E402
+from pflotran_py.visualization import shared_utils  # noqa: E402
 
 HANFORD_DB = os.path.join(REPO_ROOT, "sandbox", "hanford.dat")
 CUSTOM_PFLOTRAN = os.path.join(REPO_ROOT, "build", "pflotran")

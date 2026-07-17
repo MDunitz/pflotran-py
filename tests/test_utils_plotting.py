@@ -1,16 +1,14 @@
 """Unit tests for Plotly visualization helpers."""
 
 import os
-import sys
 
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(REPO_ROOT, "visualization"))
 
-import utils_plotting as plotting  # noqa: E402
+from pflotran_py.visualization import utils_plotting as plotting  # noqa: E402
 
 SAMPLE_CSV = os.path.join(REPO_ROOT, "sample_data", "pflotran_data.csv")
 
@@ -81,7 +79,7 @@ def test_create_multi_variable_plot_returns_none_for_missing_vars(sample_df):
 
 
 def test_step2_plot_reexports_helpers():
-    import step2_plot
+    from pflotran_py.visualization import step2_plot
 
     assert (
         step2_plot.create_single_variable_plot is plotting.create_single_variable_plot

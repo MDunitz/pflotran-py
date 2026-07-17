@@ -11,15 +11,12 @@ For multi-condition comparisons (varying water activity),
 see ../compare/comparing_aw.ipynb
 """
 
-import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-import step1_extract  # noqa: E402
-import step2_plot  # noqa: E402
-import step3_flux  # noqa: E402
-import step4_plotflux  # noqa: E402
+from . import step1_extract
+from . import step2_plot
+from . import step3_flux
+from . import step4_plotflux
 
 # ─────────────────────────────────────────────────────────────────
 # Configuration — edit these as needed
@@ -27,7 +24,10 @@ import step4_plotflux  # noqa: E402
 
 # Data source
 DATA_FORMAT = "tec"  # 'tec' or 'hdf5'
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sample_data")
+_REPO_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
+)
+DATA_DIR = os.path.join(_REPO_ROOT, "sample_data")
 FILE_TEMPLATE = "test29-{:03d}.tec"
 N_FILES = 6
 

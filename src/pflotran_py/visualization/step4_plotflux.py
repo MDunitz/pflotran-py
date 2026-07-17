@@ -14,7 +14,7 @@ from bokeh.plotting import figure, save, output_file
 from bokeh.layouts import column
 from bokeh.models import HoverTool, ColumnDataSource
 
-from shared_utils import (
+from .shared_utils import (
     load_data,
     calculate_gradients,
     convert_to_flux,
