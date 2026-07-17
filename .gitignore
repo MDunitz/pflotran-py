@@ -4,3 +4,4 @@ tests/custom_e2e_output/
 tests/custom_e2e_hdf5_output/
 build/
 sandbox/custom_*/
+sandbox/examples/temp_biodegradation_hill/runs/
