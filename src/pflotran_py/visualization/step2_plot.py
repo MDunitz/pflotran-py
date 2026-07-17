@@ -7,9 +7,9 @@
 ########################################################################
 # 1) Load in the processed data (CSV) and other imports
 ########################################################################
-from shared_utils import load_data
+from .shared_utils import load_data
 
-from utils_plotting import create_multi_variable_plot, create_single_variable_plot
+from .utils_plotting import create_multi_variable_plot, create_single_variable_plot
 
 # Re-export for callers that import plotting helpers from step2_plot.
 __all__ = ["create_single_variable_plot", "create_multi_variable_plot", "main"]

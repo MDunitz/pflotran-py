@@ -16,11 +16,9 @@ import numpy as np
 import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, REPO_ROOT)
-sys.path.insert(0, os.path.join(REPO_ROOT, "visualization"))
 
 import pflotran_e2e_common as e2e  # noqa: E402
-import shared_utils  # noqa: E402
+from pflotran_py.visualization import shared_utils  # noqa: E402
 
 DEFAULT_INPUT = os.path.join(
     REPO_ROOT, "exploratory", "pflotran", "testing", "3_smaller_grid.in"

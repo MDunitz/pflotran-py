@@ -1,16 +1,14 @@
 """Unit tests for PFLOTRAN HDF5 extraction (no PFLOTRAN binary required)."""
 
 import os
-import sys
 
 import h5py
 import numpy as np
 import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(REPO_ROOT, "visualization"))
 
-import step1_extract_hdf5 as hdf5_extract  # noqa: E402
+from pflotran_py.visualization import step1_extract_hdf5 as hdf5_extract  # noqa: E402
 
 
 @pytest.fixture

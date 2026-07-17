@@ -9,7 +9,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from shared_utils import TIME_COL, time_to_days
+from .shared_utils import TIME_COL, time_to_days
 
 # PFLOTRAN writes a single .h5 file containing every snapshot as a
 # "Time:  <value> <unit>" group. Each group holds (nx, ny, nz) arrays named
