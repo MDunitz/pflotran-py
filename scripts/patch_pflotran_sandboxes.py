@@ -261,8 +261,14 @@ def patch_extra_sandbox(pflotran_src: Path, extra_dir: Path) -> list[str]:
                     f"Could not find reaction_sandbox.o dep anchor in {dep_path}"
                 )
 
+            # Modules that extend BioHill need that object as a dependency.
+            src_text = Path(mod["path"]).read_text()
+            extra_deps = ""
+            if "Reaction_Sandbox_BioHill_class" in src_text:
+                extra_deps = "  reaction_sandbox_biohill.o \\\n"
             dep_block = (
                 f"{obj_name} : \\\n"
+                f"{extra_deps}"
                 f"  reaction_sandbox_base.o \\\n"
                 f"  reactive_transport_aux.o \\\n"
                 f"  global_aux.o \\\n"

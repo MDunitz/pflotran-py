@@ -6,3 +6,4 @@ build/
 .venv/
 *.egg-info/
 sandbox/custom_*/
+sandbox/examples/temp_biodegradation_hill/runs/
