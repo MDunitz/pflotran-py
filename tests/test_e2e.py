@@ -14,8 +14,9 @@ import pytest
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 
-from pflotran_py.visualization import step1_extract  # noqa: E402
-from pflotran_py.visualization import shared_utils  # noqa: E402
+from pflotran_py.visualization import extract  # noqa: E402
+from pflotran_py.visualization import physics  # noqa: E402
+from pflotran_py.visualization import columns  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ SPECIES_MAP = {
 @pytest.fixture(scope="module")
 def extracted_df():
     """Extract all test29 .tec files into a single DataFrame."""
-    return step1_extract.extract_pflotran_data_tec(
+    return extract.extract_pflotran_data_tec(
         data_dir=SAMPLE_DATA_DIR,
         file_name_template=FILE_TEMPLATE,
         n_files=N_FILES,
@@ -42,14 +43,14 @@ def extracted_df():
 @pytest.fixture(scope="module")
 def gradient_df(extracted_df):
     """Compute concentration gradients for CO2 and CH4."""
-    return shared_utils.calculate_gradients(extracted_df.copy(), SPECIES_MAP)
+    return physics.calculate_gradients(extracted_df.copy(), SPECIES_MAP)
 
 
 @pytest.fixture(scope="module")
 def flux_df(gradient_df):
     """Convert gradients to diffusive fluxes with Stokes-Einstein correction."""
     species_list = list(SPECIES_MAP.keys())
-    return shared_utils.convert_to_flux(
+    return physics.convert_to_flux(
         gradient_df.copy(), species_list, temperature_c=TEMPERATURE_C
     )
 
@@ -118,14 +119,14 @@ def test_extraction_matches_reference_csv(extracted_df):
 def test_gradient_columns_created(gradient_df):
     for species in SPECIES_MAP:
         for component in ["x", "y", "z"]:
-            col = shared_utils.gradient_col(species, component)
+            col = columns.gradient_col(species, component)
             assert col in gradient_df.columns, f"Missing gradient column: {col}"
 
 
 def test_gradients_are_finite(gradient_df):
     for species in SPECIES_MAP:
         for component in ["x", "y", "z"]:
-            col = shared_utils.gradient_col(species, component)
+            col = columns.gradient_col(species, component)
             vals = gradient_df[col].dropna()
             assert np.all(np.isfinite(vals)), f"Non-finite values in {col}"
 
@@ -135,7 +136,7 @@ def test_initial_gradients_near_zero(gradient_df):
     t0 = gradient_df[gradient_df["Time Index"] == 0]
     for species in SPECIES_MAP:
         for component in ["x", "y", "z"]:
-            col = shared_utils.gradient_col(species, component)
+            col = columns.gradient_col(species, component)
             vals = t0[col].dropna()
             if len(vals) > 0:
                 assert np.max(np.abs(vals)) < 1e-3, (
@@ -150,14 +151,14 @@ def test_initial_gradients_near_zero(gradient_df):
 def test_flux_columns_created(flux_df):
     for species in SPECIES_MAP:
         for component in ["x", "y", "z"]:
-            col = shared_utils.flux_col(species, component)
+            col = columns.flux_col(species, component)
             assert col in flux_df.columns, f"Missing flux column: {col}"
 
 
 def test_fluxes_are_finite(flux_df):
     for species in SPECIES_MAP:
         for component in ["x", "y", "z"]:
-            col = shared_utils.flux_col(species, component)
+            col = columns.flux_col(species, component)
             vals = flux_df[col].dropna()
             assert np.all(np.isfinite(vals)), f"Non-finite values in {col}"
 
@@ -170,7 +171,7 @@ def test_stokes_einstein_at_reference_is_unity():
 
     At T = T_ref, this must equal 1.0 by definition.
     """
-    correction = shared_utils.stokes_einstein_correction(25.0, reference_c=25.0)
+    correction = physics.stokes_einstein_correction(25.0, reference_c=25.0)
     assert abs(correction - 1.0) < 1e-10
 
 
@@ -183,7 +184,7 @@ def test_stokes_einstein_at_8c_less_than_unity():
     Water viscosity increases at lower temperatures, so D(8C) < D(25C)
     and the correction factor should be < 1.
     """
-    correction = shared_utils.stokes_einstein_correction(8.0, reference_c=25.0)
+    correction = physics.stokes_einstein_correction(8.0, reference_c=25.0)
     assert 0 < correction < 1.0, (
         f"Stokes-Einstein correction at 8C = {correction:.4f}, "
         "expected < 1.0 (higher viscosity reduces diffusivity)"

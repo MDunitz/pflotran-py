@@ -17,8 +17,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-from pflotran_py.visualization import step1_extract  # noqa: E402
-from pflotran_py.visualization import shared_utils  # noqa: E402
+from pflotran_py.visualization import extract  # noqa: E402
+from pflotran_py.visualization import physics  # noqa: E402
+from pflotran_py.visualization import columns  # noqa: E402
 
 HANFORD_DB = os.path.join(REPO_ROOT, "sandbox", "hanford.dat")
 CUSTOM_PFLOTRAN = os.path.join(REPO_ROOT, "build", "pflotran")
@@ -220,7 +221,7 @@ def parse_expected_snapshots(deck_path):
 
 def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
     os.makedirs(output_dir, exist_ok=True)
-    time_col = shared_utils.time_axis_column(flux_df)
+    time_col = columns.time_axis_column(flux_df)
     cols = ["Time Index"]
     if time_col != "Time Index":
         cols.append(time_col)
@@ -252,7 +253,7 @@ def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for species in species_map:
-        mag_col = shared_utils.flux_col(species, "magnitude")
+        mag_col = columns.flux_col(species, "magnitude")
         means = [
             flux_df.loc[flux_df["Time Index"] == t_idx, mag_col].mean()
             for t_idx, _ in times
@@ -264,7 +265,7 @@ def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
             label=f"{species} |J| mean",
         )
     ax.set_xlabel(time_col)
-    ax.set_ylabel(f"Diffusive flux magnitude [{shared_utils.FLUX_UNITS}]")
+    ax.set_ylabel(f"Diffusive flux magnitude [{columns.FLUX_UNITS}]")
     ax.set_title("Mean diffusive flux magnitude vs time")
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -340,7 +341,7 @@ def run_full_pipeline(
 
         # Detect output format from files actually produced (TEC or HDF5).
         tec_snapshots = discover_snapshots(workdir)
-        h5_path = step1_extract.find_hdf5_output(workdir, prefix="sim")
+        h5_path = extract.find_hdf5_output(workdir, prefix="sim")
         if tec_snapshots:
             output_format = "tec"
         elif h5_path is not None:
@@ -348,7 +349,7 @@ def run_full_pipeline(
         else:
             raise RuntimeError("PFLOTRAN produced no snapshot output (.tec or .h5).")
 
-        df = step1_extract.extract_pflotran_data(
+        df = extract.extract_pflotran_data(
             data_dir=workdir,
             prefix="sim",
             data_format=output_format,
@@ -356,8 +357,8 @@ def run_full_pipeline(
         n_snapshots = int(df["Time Index"].nunique())
 
         species_map = resolve_species_map(df, base_map=species_map)
-        df = shared_utils.calculate_gradients(df, species_map)
-        df = shared_utils.convert_to_flux(
+        df = physics.calculate_gradients(df, species_map)
+        df = physics.convert_to_flux(
             df, list(species_map.keys()), temperature_c=temperature_c
         )
 
