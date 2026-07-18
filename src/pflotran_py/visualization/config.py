@@ -11,8 +11,9 @@ DEFAULT_SPECIES_MAP = {
 }
 
 # Simulation temperature [°C] for the Stokes-Einstein diffusion correction.
-# Must match the temperature used in the PFLOTRAN .in file.
-DEFAULT_TEMPERATURE_C = 8.0
+# Must match the temperature used in the PFLOTRAN .in file (generator default
+# is 18 °C, set to match the batch incubations).
+DEFAULT_TEMPERATURE_C = 18.0
 
 # Number of timesteps rendered in the 2D surface maps.
 DEFAULT_N_TIMESTEPS_2D = 5
