@@ -110,7 +110,10 @@ DEFAULT_INITIAL_CONCENTRATIONS = {
 }
 
 # Atmospheric boundary condition
-# CO2(aq): ~1.9e-5 M at 8°C, see REFERENCES.md (Henry's law derivation)
+# CO2(aq) is Henry's-law-derived and temperature-dependent (K_H falls as water
+# warms). At the 18 C simulation temperature the consistent value is ~1.74e-5 M
+# (Weiss 1974, freshwater, pCO2=420 ppm); the value below (~1.9e-5) is ~9% high
+# and its exact seawater value is tracked separately. See REFERENCES.md.
 DEFAULT_ATMOSPHERIC_CONCENTRATIONS = {
     "H+": "5.0 P",
     "O2(aq)": "1.00d-04 T",
@@ -210,7 +213,7 @@ class PFLOTRANGenerator:
         # --- Domain geometry ---
         dimensions="1d",
         # --- Simulation control ---
-        temperature=8.0,
+        temperature=18.0,
         final_time_days=31,
         initial_timestep_hours=2.0,
         max_timestep_hours=12.0,
