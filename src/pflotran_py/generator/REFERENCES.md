@@ -18,17 +18,19 @@ p_CO₂  = atmospheric partial pressure of CO₂ [atm]
 |-----------|-------|--------|
 | K_H (25°C) | 3.4 × 10⁻² mol/(L·atm) | Sander, R. (2023). Compilation of Henry's law constants (v5.0.0). *Atmos. Chem. Phys.*, 23, 10901–12440. https://doi.org/10.5194/acp-23-10901-2023 |
 | K_H (20°C) | 3.7 × 10⁻² mol/(L·atm) | ibid. |
+| K_H (18°C) | ~4.15 × 10⁻² mol/(L·atm) | Weiss (1974), freshwater (reproduces Sander 25°C = 3.40e-2) |
 | K_H (8°C)  | ~5.3 × 10⁻² mol/(L·atm) | Interpolated from Weiss (1974) temperature dependence |
 | p_CO₂ (atmosphere) | 4.2 × 10⁻⁴ atm (~420 ppm) | NOAA Global Monitoring Laboratory, 2024 |
 
-**Expected [CO₂(aq)] at simulation temperature (8°C):**
+**Expected [CO₂(aq)] at simulation temperature (18°C):**
 ```
-[CO₂(aq)] = 5.3e-2 × 4.2e-4 ≈ 2.2e-5 M
+[CO₂(aq)] = 4.15e-2 × 4.2e-4 ≈ 1.74e-5 M   (freshwater; seawater salting-out ≈ −8% → ~1.6e-5)
 ```
 
-**Value in generator:** `1.906e-05 M` — reasonable for slightly warmer conditions or
-lower assumed pCO₂. Consistent with O'Meara et al. (2024) SWaMP constraint using
-`G CO2(g)` gas equilibrium.
+**Value in generator:** `1.906e-05 M` — implies K_H ≈ 4.54e-2 (≈14–15°C), so it is ~9%
+high for an 18°C run. Not corrected here because the seawater-appropriate value couples
+to the dissolved-carbon correction work in `MDunitz/saltyBiomass` (carbonate system,
+PyCO2SYS). Tracked for tightening.
 
 **BUG:** The generator wrote `'1.906-05 T'` (missing `e` in scientific notation).
 Fixed to `'1.906e-05 T'`.
