@@ -8,18 +8,12 @@ import shutil
 import tempfile
 import subprocess
 
-import numpy as np
-
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 from pflotran_py.visualization import extract  # noqa: E402
 from pflotran_py.visualization import physics  # noqa: E402
 from pflotran_py.visualization import columns  # noqa: E402
+from pflotran_py.visualization import bokeh_plotting  # noqa: E402
 
 HANFORD_DB = os.path.join(REPO_ROOT, "sandbox", "hanford.dat")
 CUSTOM_PFLOTRAN = os.path.join(REPO_ROOT, "build", "pflotran")
@@ -220,83 +214,40 @@ def parse_expected_snapshots(deck_path):
 
 
 def render_images(flux_df, output_dir, species_map=SPECIES_MAP):
+    """Render the e2e overview visuals as Bokeh HTML (no matplotlib/PNG).
+
+    Returns {name: html_path}. HTML avoids the headless-browser dependency
+    that Bokeh PNG export would require in CI.
+    """
     os.makedirs(output_dir, exist_ok=True)
-    time_col = columns.time_axis_column(flux_df)
-    cols = ["Time Index"]
-    if time_col != "Time Index":
-        cols.append(time_col)
-    snapshots = (
-        flux_df[cols].drop_duplicates(subset=["Time Index"]).sort_values("Time Index")
-    )
-    times = list(zip(snapshots["Time Index"], snapshots[time_col]))
     images = {}
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for species, col in species_map.items():
-        means = [
-            flux_df.loc[flux_df["Time Index"] == t_idx, col].mean()
-            for t_idx, _ in times
-        ]
-        ax.plot(
-            [t_days for _, t_days in times], means, marker="o", label=f"{species} mean"
-        )
-    ax.set_xlabel(time_col)
-    ax.set_ylabel("Concentration [M]")
-    ax.set_title("Mean aqueous concentration vs time")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    path = os.path.join(output_dir, "concentration_timeseries.png")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-    images["concentration_timeseries"] = path
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for species in species_map:
-        mag_col = columns.flux_col(species, "magnitude")
-        means = [
-            flux_df.loc[flux_df["Time Index"] == t_idx, mag_col].mean()
-            for t_idx, _ in times
-        ]
-        ax.plot(
-            [t_days for _, t_days in times],
-            means,
-            marker="s",
-            label=f"{species} |J| mean",
-        )
-    ax.set_xlabel(time_col)
-    ax.set_ylabel(f"Diffusive flux magnitude [{columns.FLUX_UNITS}]")
-    ax.set_title("Mean diffusive flux magnitude vs time")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    path = os.path.join(output_dir, "flux_magnitude_timeseries.png")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-    images["flux_magnitude_timeseries"] = path
-
-    final_idx, final_days = times[-1]
-    final = flux_df[flux_df["Time Index"] == final_idx]
-    z_mid = sorted(final["Z [m]"].unique())[len(final["Z [m]"].unique()) // 2]
-    layer = final[np.isclose(final["Z [m]"], z_mid)]
-    fig, ax = plt.subplots(figsize=(7, 6))
-    sc = ax.scatter(
-        layer["X [m]"],
-        layer["Y [m]"],
-        c=layer[species_map["CH4"]],
-        s=400,
-        marker="s",
-        cmap="viridis",
+    images["concentration_timeseries"] = bokeh_plotting.render_mean_timeseries(
+        flux_df,
+        {species: col for species, col in species_map.items()},
+        y_label="Concentration [M]",
+        title="Mean aqueous concentration vs time",
+        output_dir=output_dir,
+        filename="concentration_timeseries.html",
     )
-    fig.colorbar(sc, ax=ax, label="Free CH4(aq) [M]")
-    ax.set_xlabel("X [m]")
-    ax.set_ylabel("Y [m]")
-    ax.set_title(f"CH4 at z={z_mid:g} m, t={final_days:g} d")
-    path = os.path.join(output_dir, "ch4_final_zslice.png")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-    images["ch4_final_zslice"] = path
+
+    images["flux_magnitude_timeseries"] = bokeh_plotting.render_mean_timeseries(
+        flux_df,
+        {species: columns.flux_col(species, "magnitude") for species in species_map},
+        y_label=f"Diffusive flux magnitude [{columns.FLUX_UNITS}]",
+        title="Mean diffusive flux magnitude vs time",
+        output_dir=output_dir,
+        filename="flux_magnitude_timeseries.html",
+        sci=True,
+    )
+
+    images["ch4_final_zslice"] = bokeh_plotting.render_z_slice(
+        flux_df,
+        species_map["CH4"],
+        output_dir=output_dir,
+        filename="ch4_final_zslice.html",
+        color_label=species_map["CH4"],
+    )
 
     return images
 

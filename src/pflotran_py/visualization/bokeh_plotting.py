@@ -9,9 +9,10 @@ builders live here (not in the physics module) because they are presentation.
 import logging
 import os
 
+import numpy as np
 from bokeh.plotting import figure, save, output_file
 from bokeh.layouts import column, row
-from bokeh.models import HoverTool, ColumnDataSource
+from bokeh.models import HoverTool, ColumnDataSource, ColorBar, LinearColorMapper
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Viridis256
 
@@ -336,3 +337,106 @@ def render_time_series(
     quantity = "Flux" if use_flux else "Gradient"
     logger.info("%s time series saved: %s", quantity, output_path)
     return output_path
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Domain-mean time series (mean over all cells per snapshot)
+# ═════════════════════════════════════════════════════════════════════
+
+
+def render_mean_timeseries(
+    flux_df, series_map, y_label, title, output_dir, filename, sci=False
+):
+    """Render domain-mean-vs-time lines (one per series) to an HTML file.
+
+    series_map maps a legend label (species short name) to the DataFrame
+    column whose per-snapshot spatial mean is plotted.
+    """
+    time_col = time_axis_column(flux_df)
+    grouped = flux_df.groupby("Time Index")
+    times = grouped[time_col].first().tolist()
+
+    p = figure(
+        title=title,
+        x_axis_label=time_col,
+        y_axis_label=y_label,
+        width=800,
+        height=500,
+        tools="pan,wheel_zoom,box_zoom,reset,save",
+    )
+    for label, col in series_map.items():
+        means = grouped[col].mean().tolist()
+        color = SPECIES_LINE_COLORS.get(label, "gray")
+        p.line(times, means, line_width=2, color=color, alpha=0.8, legend_label=label)
+        p.scatter(times, means, size=6, color=color, alpha=0.8)
+
+    p.legend.location = "top_left"
+    p.legend.click_policy = "hide"
+    if sci:
+        p.yaxis.formatter.use_scientific = True
+
+    return save_layout_html(p, output_dir, filename)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Arbitrary-z concentration slice (XY map at one depth + timestep)
+# ═════════════════════════════════════════════════════════════════════
+
+
+def render_z_slice(
+    df, conc_col, output_dir, filename, z=None, time_idx=None, color_label=None
+):
+    """Render an XY concentration map at one Z layer and timestep to HTML.
+
+    Defaults to the final timestep and the middle Z layer. Distinct from the
+    surface maps (top layer, gradient/flux); this is a raw-concentration slice
+    at an arbitrary depth.
+    """
+    color_label = color_label or conc_col
+    time_col = time_axis_column(df)
+
+    if time_idx is None:
+        time_idx = sorted(df["Time Index"].unique())[-1]
+    snap = df[df["Time Index"] == time_idx]
+
+    if z is None:
+        z_levels = sorted(snap["Z [m]"].unique())
+        z = z_levels[len(z_levels) // 2]
+    layer = snap[np.isclose(snap["Z [m]"], z)]
+
+    t_label = layer[time_col].iloc[0] if time_col in layer.columns else time_idx
+    vmin = float(layer[conc_col].min())
+    vmax = float(layer[conc_col].max())
+    v_high = vmax if vmax > vmin else vmin + SIGNAL_FLOOR
+    mapper = LinearColorMapper(palette=Viridis256, low=vmin, high=v_high)
+
+    p = figure(
+        title=f"{color_label} at z={z:g} m, t={t_label:g} d",
+        x_axis_label="X [m]",
+        y_axis_label="Y [m]",
+        width=560,
+        height=520,
+        tools="pan,wheel_zoom,box_zoom,reset,save",
+    )
+    source = ColumnDataSource(layer)
+    renderer = p.scatter(
+        "X [m]",
+        "Y [m]",
+        size=18,
+        marker="square",
+        color={"field": conc_col, "transform": mapper},
+        source=source,
+        alpha=0.9,
+    )
+    p.add_layout(ColorBar(color_mapper=mapper, title=color_label), "right")
+    p.add_tools(
+        HoverTool(
+            tooltips=[
+                ("X [m]", "@{X [m]}{0.00}"),
+                ("Y [m]", "@{Y [m]}{0.00}"),
+                (color_label, f"@{{{conc_col}}}"),
+            ],
+            renderers=[renderer],
+        )
+    )
+    return save_layout_html(p, output_dir, filename)
