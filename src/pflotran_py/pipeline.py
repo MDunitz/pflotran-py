@@ -1,17 +1,27 @@
-"""PFLOTRAN visualization pipeline: extract -> compute -> render.
+"""PFLOTRAN post-processing pipeline: extract -> compute -> render.
 
 Replaces the former step1..4 + orchestrator scripts. Each render stage is
 independently runnable from the saved pickle; ``run`` chains them. 3D scatter
 uses Plotly (Bokeh has no 3D); the 2D surface maps and time series use Bokeh.
 
+Lives at package top level because it is the only module that legitimately
+imports both ``analysis`` (compute) and ``visualization`` (presentation);
+placing it inside either one would invert that dependency.
+
 Run the whole pipeline from a checkout with:
-    python -m pflotran_py.visualization.pipeline
+    python -m pflotran_py.pipeline
 """
 
 import logging
 import os
 
-from . import bokeh_plotting, physics, plotly_plotting, transforms
+from .analysis import gradients, transforms
+from .analysis.data_io import load_data, save_data
+from .analysis.extract import (
+    extract_pflotran_data_tec,
+    find_hdf5_output,
+    extract_pflotran_data_hdf5,
+)
 from .config import (
     DEFAULT_3D_VARIABLES,
     DEFAULT_DATA_PICKLE,
@@ -22,12 +32,7 @@ from .config import (
     DEFAULT_TEMPERATURE_C,
     DEFAULT_TIMESERIES_FILENAME,
 )
-from .data_io import load_data, save_data
-from .extract import (
-    extract_pflotran_data_tec,
-    find_hdf5_output,
-    extract_pflotran_data_hdf5,
-)
+from .visualization import bokeh_plotting, plotly_plotting
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +112,12 @@ def render_surface_stage(
     df = load_data(pickle)
 
     logger.info("Computing concentration gradients...")
-    df = physics.calculate_gradients(df, species_map)
+    df = gradients.calculate_gradients(df, species_map)
     if compute_flux:
         logger.info("Converting to flux (Fick's law, T=%s°C)...", temperature_c)
-        df = physics.convert_to_flux(df, list(species_map), temperature_c=temperature_c)
+        df = gradients.convert_to_flux(
+            df, list(species_map), temperature_c=temperature_c
+        )
 
     df = transforms.identify_surface_cells(df)
 
@@ -149,10 +156,12 @@ def render_time_series_stage(
     logger.info("Target point: (%.3f, %.3f, %.3f)", *target)
 
     logger.info("Computing concentration gradients...")
-    df = physics.calculate_gradients(df, species_map)
+    df = gradients.calculate_gradients(df, species_map)
     if compute_flux:
         logger.info("Converting to flux (T=%s°C)...", temperature_c)
-        df = physics.convert_to_flux(df, list(species_map), temperature_c=temperature_c)
+        df = gradients.convert_to_flux(
+            df, list(species_map), temperature_c=temperature_c
+        )
 
     point_data = transforms.extract_point_time_series(df, *target)
 

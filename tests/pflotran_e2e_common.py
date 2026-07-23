@@ -10,9 +10,9 @@ import subprocess
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-from pflotran_py.visualization import extract  # noqa: E402
-from pflotran_py.visualization import physics  # noqa: E402
-from pflotran_py.visualization import columns  # noqa: E402
+from pflotran_py.analysis import extract  # noqa: E402
+from pflotran_py.analysis import gradients  # noqa: E402
+from pflotran_py.analysis import columns  # noqa: E402
 from pflotran_py.visualization import bokeh_plotting  # noqa: E402
 
 HANFORD_DB = os.path.join(REPO_ROOT, "sandbox", "hanford.dat")
@@ -308,8 +308,8 @@ def run_full_pipeline(
         n_snapshots = int(df["Time Index"].nunique())
 
         species_map = resolve_species_map(df, base_map=species_map)
-        df = physics.calculate_gradients(df, species_map)
-        df = physics.convert_to_flux(
+        df = gradients.calculate_gradients(df, species_map)
+        df = gradients.convert_to_flux(
             df, list(species_map.keys()), temperature_c=temperature_c
         )
 
