@@ -16,9 +16,9 @@ from astropy import units as u
 # Ref: Boudreau, B.P. (1997). Diagenetic Models and Their Implementation.
 #      Springer. Table 4.3.
 # NOTE: infinite-dilution freshwater values. In hypersaline brine the true
-# tracer D is lower (higher viscosity, ion pairing); see project issue on
-# brine-corrected diffusion. The Stokes-Einstein correction in physics.py
-# corrects temperature only.
+# tracer D is lower (higher viscosity, ion pairing); see issue #22
+# (github.com/MDunitz/pflotran-py/issues/22). The Stokes-Einstein correction
+# in physics.py corrects temperature only.
 DIFFUSION_COEFFICIENTS_25C = {
     "CO2": 1.91e-9 * u.m**2 / u.s,
     "CH4": 1.49e-9 * u.m**2 / u.s,
