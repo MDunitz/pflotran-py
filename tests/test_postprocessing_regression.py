@@ -26,8 +26,8 @@ import pytest
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 
-from pflotran_py.visualization import extract  # noqa: E402
-from pflotran_py.visualization import physics  # noqa: E402
+from pflotran_py.analysis import extract  # noqa: E402
+from pflotran_py.analysis import gradients  # noqa: E402
 
 SAMPLE_DATA_DIR = os.path.join(REPO_ROOT, "sample_data")
 FILE_TEMPLATE = "test29-{:03d}.tec"
@@ -74,8 +74,8 @@ def flux_df():
         file_name_template=FILE_TEMPLATE,
         n_files=N_FILES,
     )
-    df = physics.calculate_gradients(df, SPECIES_MAP)
-    return physics.convert_to_flux(df, list(SPECIES_MAP), temperature_c=TEMPERATURE_C)
+    df = gradients.calculate_gradients(df, SPECIES_MAP)
+    return gradients.convert_to_flux(df, list(SPECIES_MAP), temperature_c=TEMPERATURE_C)
 
 
 @pytest.mark.parametrize("column", sorted(GOLDEN))
@@ -100,7 +100,7 @@ def test_gradient_and_flux_values_are_pinned(flux_df, column):
 @pytest.mark.parametrize("temperature_c", sorted(GOLDEN_STOKES_EINSTEIN))
 def test_stokes_einstein_factors_are_pinned(temperature_c):
     np.testing.assert_allclose(
-        physics.stokes_einstein_correction(temperature_c),
+        gradients.stokes_einstein_correction(temperature_c),
         GOLDEN_STOKES_EINSTEIN[temperature_c],
         rtol=1e-10,
     )

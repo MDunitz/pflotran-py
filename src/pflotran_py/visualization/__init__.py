@@ -1,25 +1,11 @@
-"""PFLOTRAN reactive-transport post-processing.
+"""Presentation layer: renders analysis output to HTML figures.
 
-Layered so compute and presentation stay separate:
-    extract, extract_hdf5   -- Tecplot / HDF5 -> DataFrame
-    physics                 -- gradients + Fick diffusive flux (astropy consts)
-    transforms              -- spatial DataFrame ops (surface cells, point series)
-    columns                 -- column names, unit strings, time labeling
-    config, data_io         -- defaults and pickle/CSV persistence
-    plotly_plotting         -- 3D scatter (Plotly)
-    bokeh_plotting          -- 2D surface maps + time series (Bokeh)
-    pipeline                -- extract -> compute -> render orchestration
+Plotting only. Everything upstream of a figure -- extraction, gradients, flux,
+spatial transforms -- lives in ``pflotran_py.analysis``; the naming/unit
+contract these modules render against is ``analysis.columns``.
+
+    plotly_plotting  -- 3D scatter (Plotly; Bokeh has no 3D)
+    bokeh_plotting   -- 2D surface maps + time series (Bokeh)
 """
 
-from . import (  # noqa: F401
-    bokeh_plotting,
-    columns,
-    config,
-    data_io,
-    extract,
-    extract_hdf5,
-    physics,
-    pipeline,
-    plotly_plotting,
-    transforms,
-)
+from . import bokeh_plotting, plotly_plotting  # noqa: F401
