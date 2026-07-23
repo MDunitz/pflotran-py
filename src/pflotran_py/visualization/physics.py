@@ -1,42 +1,24 @@
 """Concentration-gradient and diffusive-flux computation.
 
-Physics constants use ``astropy.units`` so the values carry dimensions and the
-M -> mol/m^3 conversion factor is derived rather than hard-coded. The
-per-cell arithmetic runs on plain-float DataFrame columns (astropy Quantities
-do not vectorize cleanly into pandas columns); units are re-attached at the
-column-name level via ``columns.GRADIENT_UNITS`` / ``FLUX_UNITS``.
+Physics/empirical constants (diffusion coefficients, Vogel viscosity
+coefficients, the M -> mol/m^3 conversion factor) live in ``constants.py`` and
+carry ``astropy.units``. The per-cell arithmetic runs on plain-float DataFrame
+columns (astropy Quantities do not vectorize cleanly into pandas columns);
+units are re-attached at the column-name level via ``columns.GRADIENT_UNITS`` /
+``FLUX_UNITS``.
 """
 
 import numpy as np
 from astropy import units as u
 
 from .columns import gradient_col, flux_col
-
-# ═════════════════════════════════════════════════════════════════════
-# Diffusion coefficients
-# ═════════════════════════════════════════════════════════════════════
-
-# Molecular diffusion coefficients in water at 25 °C.
-# Ref: Boudreau, B.P. (1997). Diagenetic Models and Their Implementation.
-#      Springer. Table 4.3.
-# NOTE: infinite-dilution freshwater values. In hypersaline brine the true
-# tracer D is lower (higher viscosity, ion pairing); see project issue on
-# brine-corrected diffusion. Stokes-Einstein below corrects temperature only.
-DIFFUSION_COEFFICIENTS_25C = {
-    "CO2": 1.91e-9 * u.m**2 / u.s,
-    "CH4": 1.49e-9 * u.m**2 / u.s,
-    "SO4": 1.07e-9 * u.m**2 / u.s,
-    "O2": 2.10e-9 * u.m**2 / u.s,
-    "HCO3": 1.18e-9 * u.m**2 / u.s,
-    "H2S": 2.12e-9 * u.m**2 / u.s,
-    "Fe2": 0.72e-9 * u.m**2 / u.s,  # Fe²⁺
-    "Cl": 2.03e-9 * u.m**2 / u.s,
-    "Na": 1.33e-9 * u.m**2 / u.s,
-}
-
-# Gradients are stored in M/m = mol/(L·m); Fick's law needs mol/(m³·m).
-# Derive the factor with astropy instead of hard-coding 1000.
-_M_PER_M_TO_SI = (1.0 * u.mol / u.L / u.m).to(u.mol / u.m**3 / u.m).value  # 1000.0
+from .constants import (
+    DIFFUSION_COEFFICIENTS_25C,
+    M_PER_M_TO_SI,
+    WATER_VISCOSITY_VOGEL_A,
+    WATER_VISCOSITY_VOGEL_B,
+    WATER_VISCOSITY_VOGEL_C,
+)
 
 
 def stokes_einstein_correction(temperature_c, reference_c=25.0):
@@ -45,8 +27,8 @@ def stokes_einstein_correction(temperature_c, reference_c=25.0):
     Stokes-Einstein scaling (D = k_B·T / (6·π·μ·r), so D ∝ T/μ):
         D(T) / D(T_ref) = (T / T_ref) × (μ_ref / μ_T)
 
-    Water viscosity empirical fit (Vogel form, Sharqawy et al., 2010):
-        μ(t) ≈ 2.414e-5 × 10^(247.8 / (t + 133.15))  [Pa·s], t in °C
+    Water viscosity (Vogel equation, coefficients in constants.py):
+        μ(T) = A · 10^(B / (T − C))  [Pa·s], T absolute (K)
 
     Parameters
     ----------
@@ -62,7 +44,13 @@ def stokes_einstein_correction(temperature_c, reference_c=25.0):
     """
 
     def viscosity(t_c):
-        return 2.414e-5 * 10 ** (247.8 / (t_c + 133.15))
+        t_k = (t_c * u.deg_C).to(u.K, equivalencies=u.temperature())
+        exponent = (WATER_VISCOSITY_VOGEL_B / (t_k - WATER_VISCOSITY_VOGEL_C)).to_value(
+            u.dimensionless_unscaled
+        )
+        # Only the μ_ref/μ_T ratio is used downstream, so the Pa·s magnitude
+        # returned here cancels; return a plain float.
+        return WATER_VISCOSITY_VOGEL_A.to_value(u.Pa * u.s) * 10**exponent
 
     t_k = (temperature_c * u.deg_C).to(u.K, equivalencies=u.temperature()).value
     t_ref_k = (reference_c * u.deg_C).to(u.K, equivalencies=u.temperature()).value
@@ -159,7 +147,7 @@ def convert_to_flux(df, species_list, temperature_c=25.0):
     Fick's First Law:
         J = −D(T)·∇C
     calculate_gradients() stores −∇C, so with that column the sign works out
-    as J = +D(T)·(stored). The ×_M_PER_M_TO_SI factor converts the stored
+    as J = +D(T)·(stored). The ×M_PER_M_TO_SI factor converts the stored
     gradient from M/m = mol/(L·m) to mol/(m³·m) before applying D.
 
     Parameters
@@ -184,7 +172,7 @@ def convert_to_flux(df, species_list, temperature_c=25.0):
         for component in ["x", "y", "z"]:
             g_col = gradient_col(species, component)
             f_col = flux_col(species, component)
-            df[f_col] = d_t * df[g_col] * _M_PER_M_TO_SI
+            df[f_col] = d_t * df[g_col] * M_PER_M_TO_SI
 
         df[flux_col(species, "magnitude")] = np.sqrt(
             df[flux_col(species, "x")] ** 2
