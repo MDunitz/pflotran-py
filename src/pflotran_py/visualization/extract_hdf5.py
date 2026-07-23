@@ -1,6 +1,7 @@
 """Extract PFLOTRAN simulation output from HDF5 (.h5) files."""
 
 import glob
+import logging
 import os
 import re
 import warnings
@@ -9,7 +10,9 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from .shared_utils import TIME_COL, time_to_days
+from .columns import TIME_COL, time_to_days
+
+logger = logging.getLogger(__name__)
 
 # PFLOTRAN writes a single .h5 file containing every snapshot as a
 # "Time:  <value> <unit>" group. Each group holds (nx, ny, nz) arrays named
@@ -75,9 +78,9 @@ def extract_pflotran_data_hdf5(filepath, verbose=False):
 
         time_groups = _h5_time_groups(h5)
         if verbose:
-            print(f"\n HDF5 file: {filepath}")
-            print(f"   grid: {len(xc)} x {len(yc)} x {len(zc)}")
-            print(f"   snapshots: {len(time_groups)}")
+            logger.debug("HDF5 file: %s", filepath)
+            logger.debug("  grid: %d x %d x %d", len(xc), len(yc), len(zc))
+            logger.debug("  snapshots: %d", len(time_groups))
 
         # Warn once per variable name so multi-snapshot files don't spam.
         warned_shape_mismatches = set()

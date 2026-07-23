@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .shared_utils import TIME_COL, time_axis_column
+from .columns import TIME_COL, time_axis_column
 
 SPATIAL_COLUMNS = ["X [m]", "Y [m]", "Z [m]"]
 DEFAULT_COLORSCALE = "Viridis"

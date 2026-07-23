@@ -8,7 +8,7 @@ import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-from pflotran_py.visualization import utils_plotting as plotting  # noqa: E402
+from pflotran_py.visualization import plotly_plotting as plotting  # noqa: E402
 
 SAMPLE_CSV = os.path.join(REPO_ROOT, "sample_data", "pflotran_data.csv")
 
@@ -76,12 +76,3 @@ def test_create_multi_variable_plot_returns_none_for_missing_vars(sample_df):
         sample_df, ["Not A Real Column"], verbose=False
     )
     assert fig is None
-
-
-def test_step2_plot_reexports_helpers():
-    from pflotran_py.visualization import step2_plot
-
-    assert (
-        step2_plot.create_single_variable_plot is plotting.create_single_variable_plot
-    )
-    assert step2_plot.create_multi_variable_plot is plotting.create_multi_variable_plot

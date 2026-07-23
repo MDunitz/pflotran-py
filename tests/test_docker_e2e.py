@@ -18,7 +18,7 @@ import pytest
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 import pflotran_e2e_common as e2e  # noqa: E402
-from pflotran_py.visualization import shared_utils  # noqa: E402
+from pflotran_py.visualization import columns  # noqa: E402
 
 DEFAULT_INPUT = os.path.join(
     REPO_ROOT, "exploratory", "pflotran", "testing", "3_smaller_grid.in"
@@ -74,7 +74,7 @@ def test_concentrations_physical(pipeline):
 def test_flux_columns_finite(pipeline):
     df = pipeline["dataframe"]
     for species in pipeline["species_map"]:
-        col = shared_utils.flux_col(species, "magnitude")
+        col = columns.flux_col(species, "magnitude")
         assert col in df.columns
         assert np.all(np.isfinite(df[col].dropna().values))
 
@@ -89,7 +89,7 @@ def test_co2_is_produced(pipeline):
 
 def test_flux_develops_over_time(pipeline):
     df = pipeline["dataframe"]
-    mag = shared_utils.flux_col("CO2", "magnitude")
+    mag = columns.flux_col("CO2", "magnitude")
     tf_max = df.loc[df["Time Index"] == df["Time Index"].max(), mag].max()
     assert tf_max > 0, f"No diffusive flux developed (max |J|={tf_max:.3e})"
 

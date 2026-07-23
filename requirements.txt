@@ -15,3 +15,4 @@ h5py  # PFLOTRAN HDF5 output extraction
 black
 flake8
 pytest
+astropy
