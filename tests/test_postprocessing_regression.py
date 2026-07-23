@@ -11,12 +11,40 @@ at TEMPERATURE_C. Any change to the gradient stencil, the Fick conversion, the
 Stokes-Einstein correction, the diffusion table, or the M/m -> SI factor moves
 at least one of them.
 
-Golden values captured 2026-07-23 on `main` @ 229b2a2 (pre PR-4 layout split).
-They are characterisation values, not independently derived ground truth: they
-record what the code *does*, so a deliberate physics change is expected to fail
-here and should be re-pinned in the same commit that makes the change.
+Provenance of the pinned values
+-------------------------------
+Captured 2026-07-23 on `main` @ 229b2a2 (pre PR-4 layout split) by running
+`extract -> calculate_gradients -> convert_to_flux` at TEMPERATURE_C over the
+committed sample_data and recording the aggregates. They are **characterisation
+values, not independently derived ground truth**: they record what the code
+*does*. A deliberate physics change is expected to fail here and should be
+re-pinned in the same commit that makes it. In particular they currently encode
+the diffusion coefficients flagged in #25 as decoupled from the deck, so they
+will need re-pinning when that is resolved.
 
-See issue #9 (regression tests against frozen sample_data output).
+Resolution limit of the sample data
+-----------------------------------
+The .tec files store 7 significant digits, which bounds what a gradient can
+mean. With grid spacing 0.25 m:
+
+    species  quantisation   min resolvable   median |dC/dz|   in steps
+    CO2      1.0e-09 M      4.0e-09 M/m      2.33e-05 M/m       5835
+    CH4      1.0e-21 M      4.0e-21 M/m      2.93e-22 M/m        0.1
+
+**The CO2 pins are physically meaningful. The CH4 pins are not.** CH4 takes
+only 8 distinct values across 384 cells (9.999997e-16 .. 1.000093e-15) -- it is
+the initial condition, essentially untouched by this 5-day run -- so its
+gradients are differences at and below the text-format rounding step.
+
+The CH4 pins are kept deliberately: the arithmetic is deterministic and
+reproducible, so they still function as refactor tripwires, and they are the
+only pins that would catch a CH4-specific constant error (verified: perturbing
+D_CH4 by 0.7% trips them, while every CO2 pin passes). Do not read them as
+evidence about methane transport, and do not chase a CH4 pin failure as a
+physics regression before checking whether the change is real at the 1e-21 M
+level.
+
+A dataset where CH4 actually evolves would make these pins meaningful; see #9.
 """
 
 import os
@@ -39,7 +67,9 @@ SPECIES_MAP = {
 }
 
 # column -> (sum(|v|), max(|v|))
-GOLDEN = {
+# CO2 entries are resolved by the source data; CH4 entries are noise-dominated
+# tripwires (see "Resolution limit of the sample data" above).
+PINNED = {
     "CO2_grad_x": (2.982049204492e-04, 3.579489932886e-06),
     "CO2_grad_y": (2.982049204492e-04, 3.579489932886e-06),
     "CO2_grad_z": (7.429678111297e-03, 3.279311698113e-05),
@@ -59,7 +89,7 @@ GOLDEN = {
 }
 
 # Stokes-Einstein correction factors, pinned independently of the DataFrame path.
-GOLDEN_STOKES_EINSTEIN = {
+PINNED_STOKES_EINSTEIN = {
     8.0: 0.610648087951,
     18.0: 0.826262134310,
     25.0: 1.000000000000,
@@ -78,9 +108,9 @@ def flux_df():
     return gradients.convert_to_flux(df, list(SPECIES_MAP), temperature_c=TEMPERATURE_C)
 
 
-@pytest.mark.parametrize("column", sorted(GOLDEN))
+@pytest.mark.parametrize("column", sorted(PINNED))
 def test_gradient_and_flux_values_are_pinned(flux_df, column):
-    expected_sum, expected_max = GOLDEN[column]
+    expected_sum, expected_max = PINNED[column]
     values = np.abs(flux_df[column].values)
 
     np.testing.assert_allclose(
@@ -97,10 +127,10 @@ def test_gradient_and_flux_values_are_pinned(flux_df, column):
     )
 
 
-@pytest.mark.parametrize("temperature_c", sorted(GOLDEN_STOKES_EINSTEIN))
+@pytest.mark.parametrize("temperature_c", sorted(PINNED_STOKES_EINSTEIN))
 def test_stokes_einstein_factors_are_pinned(temperature_c):
     np.testing.assert_allclose(
         gradients.stokes_einstein_correction(temperature_c),
-        GOLDEN_STOKES_EINSTEIN[temperature_c],
+        PINNED_STOKES_EINSTEIN[temperature_c],
         rtol=1e-10,
     )
