@@ -27,7 +27,7 @@ import pytest
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 import pflotran_e2e_common as e2e  # noqa: E402
-from pflotran_py.visualization import columns  # noqa: E402
+from pflotran_py.analysis import columns  # noqa: E402
 
 # 4x4x4, 5 days — first deck with active (non-skipped) AWINHIBIT sandboxes.
 # Emits Tecplot output.

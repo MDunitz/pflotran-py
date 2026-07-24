@@ -1,6 +1,6 @@
 """End-to-end test: .tec extraction -> gradient -> flux computation.
 
-Runs the full visualization pipeline (steps 1, 3) against sample_data/
+Runs the full analysis chain (extract -> gradients) against sample_data/
 and verifies the outputs are structurally correct and physically
 reasonable. Does NOT require a PFLOTRAN binary -- uses the committed
 .tec output files as input.
@@ -14,9 +14,9 @@ import pytest
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
 
-from pflotran_py.visualization import extract  # noqa: E402
-from pflotran_py.visualization import physics  # noqa: E402
-from pflotran_py.visualization import columns  # noqa: E402
+from pflotran_py.analysis import extract  # noqa: E402
+from pflotran_py.analysis import gradients  # noqa: E402
+from pflotran_py.analysis import columns  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────
 
@@ -43,14 +43,14 @@ def extracted_df():
 @pytest.fixture(scope="module")
 def gradient_df(extracted_df):
     """Compute concentration gradients for CO2 and CH4."""
-    return physics.calculate_gradients(extracted_df.copy(), SPECIES_MAP)
+    return gradients.calculate_gradients(extracted_df.copy(), SPECIES_MAP)
 
 
 @pytest.fixture(scope="module")
 def flux_df(gradient_df):
     """Convert gradients to diffusive fluxes with Stokes-Einstein correction."""
     species_list = list(SPECIES_MAP.keys())
-    return physics.convert_to_flux(
+    return gradients.convert_to_flux(
         gradient_df.copy(), species_list, temperature_c=TEMPERATURE_C
     )
 
@@ -171,7 +171,7 @@ def test_stokes_einstein_at_reference_is_unity():
 
     At T = T_ref, this must equal 1.0 by definition.
     """
-    correction = physics.stokes_einstein_correction(25.0, reference_c=25.0)
+    correction = gradients.stokes_einstein_correction(25.0, reference_c=25.0)
     assert abs(correction - 1.0) < 1e-10
 
 
@@ -184,7 +184,7 @@ def test_stokes_einstein_at_8c_less_than_unity():
     Water viscosity increases at lower temperatures, so D(8C) < D(25C)
     and the correction factor should be < 1.
     """
-    correction = physics.stokes_einstein_correction(8.0, reference_c=25.0)
+    correction = gradients.stokes_einstein_correction(8.0, reference_c=25.0)
     assert 0 < correction < 1.0, (
         f"Stokes-Einstein correction at 8C = {correction:.4f}, "
         "expected < 1.0 (higher viscosity reduces diffusivity)"

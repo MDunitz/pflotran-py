@@ -16,7 +16,7 @@ from bokeh.models import HoverTool, ColumnDataSource, ColorBar, LinearColorMappe
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Viridis256
 
-from .columns import (
+from ..analysis.columns import (
     GRADIENT_UNITS,
     FLUX_UNITS,
     TIME_COL,
