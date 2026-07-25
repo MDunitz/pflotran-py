@@ -35,9 +35,7 @@ STOICH = {"Aaq": 1.0, "Baq": 0.25, "Caq": 0.33, "Daq": 1.0}
 def parse_obs_pft(path: Path) -> dict[str, np.ndarray]:
     """Parse a PFLOTRAN observation .pft (Tecplot-like) file."""
     text = path.read_text()
-    # Find VARIABLES line
-    vars_m = re.search(r'VARIABLES\s*=\s*"([^"]+)"(?:\s*,\s*"([^"]+)")*', text, re.I)
-    # Broader: collect all quoted names on VARIABLES line
+    # Collect all quoted names on the VARIABLES line
     lines = text.splitlines()
     var_names: list[str] = []
     data_start = 0
