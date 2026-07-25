@@ -184,7 +184,9 @@ def main() -> None:
         obs_files = [args.target]
 
     example_root = Path(__file__).resolve().parents[1]
-    gold = args.gold or (example_root / "gold" / "flexible_biodegradation_hill.regression.gold")
+    gold = args.gold or (
+        example_root / "gold" / "flexible_biodegradation_hill.regression.gold"
+    )
 
     all_ok = True
     for obs in obs_files:

@@ -670,9 +670,7 @@ def render_in_snippet(defn: ReactionDef) -> str:
     ]
     if defn.activation_energy is not None:
         lines.append(f"    ACTIVATION_ENERGY {defn.activation_energy}  ! J/mol")
-        lines.append(
-            f"    REFERENCE_TEMPERATURE {defn.reference_temperature}  ! C"
-        )
+        lines.append(f"    REFERENCE_TEMPERATURE {defn.reference_temperature}  ! C")
     lines.extend(
         [
             "  /",

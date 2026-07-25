@@ -152,7 +152,13 @@ def _discover_extra_modules(extra_dir: Path) -> list[dict[str, str]]:
         if not stem_m:
             continue
         stem = stem_m.group(1)
-        if stem in {"awinhibit", "awinhibitacetate", "awinhibitmethyl", "template", "aq"}:
+        if stem in {
+            "awinhibit",
+            "awinhibitacetate",
+            "awinhibitmethyl",
+            "template",
+            "aq",
+        }:
             continue
 
         text = path.read_text()
@@ -170,9 +176,7 @@ def _discover_extra_modules(extra_dir: Path) -> list[dict[str, str]]:
             if module_name and create_name:
                 break
         if not module_name or not create_name:
-            raise RuntimeError(
-                f"Could not parse module/create symbols from {path}"
-            )
+            raise RuntimeError(f"Could not parse module/create symbols from {path}")
 
         # Keyword: uppercase stem with underscores removed (matches generator)
         keyword = stem.upper().replace("_", "")
@@ -302,8 +306,7 @@ def main():
         action="append",
         default=[],
         help=(
-            "Generated custom_* folder with reaction_sandbox_*.F90 "
-            "(may be repeated)"
+            "Generated custom_* folder with reaction_sandbox_*.F90 " "(may be repeated)"
         ),
     )
     args = parser.parse_args()
