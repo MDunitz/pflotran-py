@@ -147,9 +147,7 @@ def fetch_batches(experiment_id):
     experiment_id : str
         Key of :data:`BATCH_TAB_GIDS`, e.g. ``"Exp004"``.
     """
-    batches = pd.read_csv(
-        _sheet_url(BATCH_WORKBOOK_ID, BATCH_TAB_GIDS[experiment_id])
-    )
+    batches = pd.read_csv(_sheet_url(BATCH_WORKBOOK_ID, BATCH_TAB_GIDS[experiment_id]))
     batches = batches.dropna(subset=["Batch ID"])
     batches["Experiment"] = experiment_id
     return batches
@@ -275,6 +273,215 @@ def build_batch_table(experiment_ids=None):
 _ION_CHARGE = {"Na+": 1, "Cl-": -1, "Mg++": 2, "SO4--": -2, "Ca++": 2, "K+": 1}
 
 
+# ═════════════════════════════════════════════════════════════════════
+# Consistency checking
+# ═════════════════════════════════════════════════════════════════════
+
+
+def salt_loading_g_per_ml(brine_row):
+    """Total mass of salt per unit volume of brine [g/mL].
+
+    A single number summarising how concentrated a brine is, regardless of
+    which salt it was made from. Used only for the consistency check below.
+    """
+    volume_ml = brine_row.get("Final Volume (mL)")
+    if pd.isna(volume_ml) or volume_ml == 0:
+        return float("nan")
+    total_g = sum(
+        (brine_row.get(column, 0.0) or 0.0)
+        for column in list(SALT_COLUMNS) + [SEA_SALT_COLUMN]
+        if not pd.isna(brine_row.get(column, 0.0))
+    )
+    return total_g / volume_ml
+
+
+# Two brines are only compared when they differ by more than this much, so that
+# nominally-identical pairs (a brine and its sulfate-spiked twin) are not
+# flagged over differences that are really measurement noise.
+_LOADING_TOLERANCE_FRACTION = 0.05  # 5 percent of the larger loading
+_DENSITY_TOLERANCE_G_PER_ML = 0.005
+
+
+def check_recipe_consistency(brines=None):
+    """Cross-check each recipe against the brine's own measured density.
+
+    Dissolving salt in water makes it denser, always and monotonically. So
+    within a family of brines made from the same salt, ranking them by the salt
+    loading computed from the recipe must give the same order as ranking them by
+    the density that was measured in the laboratory. Where those two orders
+    disagree, one of the two recorded numbers is wrong.
+
+    This check exists because the recipe is the input the model is built from.
+    A wrong make-up volume does not fail loudly -- it produces a deck at
+    entirely the wrong salinity, which then disagrees with the measurements for
+    a reason that has nothing to do with the science being tested.
+
+    Returns
+    -------
+    list of dict
+        One entry per detected inconsistency, naming the two brines whose
+        density order and recipe order disagree. Empty when every family is
+        self-consistent.
+
+    Notes
+    -----
+    Deliberately reports rather than repairs. Which of the two numbers is wrong
+    is a question about what happened at the bench, and belongs to whoever ran
+    it.
+    """
+    brines = fetch_brines() if brines is None else brines
+
+    families = {
+        "sea salt": SEA_SALT_COLUMN,
+        "NaCl": "NaCl (g)",
+        "MgCl2*6H2O": "MgCl2*6H2O (g)",
+    }
+
+    problems = []
+    for family_name, column in families.items():
+        members = []
+        for _, row in brines.iterrows():
+            mass = row.get(column, 0.0)
+            density = row.get("Brine Density (g/mL)")
+            if pd.isna(mass) or mass == 0 or pd.isna(density):
+                continue
+            loading = salt_loading_g_per_ml(row)
+            if pd.isna(loading):
+                continue
+            members.append((row["Brine Name"], loading, float(density)))
+
+        for i, (name_a, loading_a, density_a) in enumerate(members):
+            for name_b, loading_b, density_b in members[i + 1 :]:
+                loading_gap = abs(loading_a - loading_b)
+                density_gap = abs(density_a - density_b)
+                if (
+                    loading_gap
+                    < _LOADING_TOLERANCE_FRACTION * max(loading_a, loading_b)
+                    or density_gap < _DENSITY_TOLERANCE_G_PER_ML
+                ):
+                    continue
+
+                denser = density_a > density_b
+                more_concentrated = loading_a > loading_b
+                if denser != more_concentrated:
+                    problems.append(
+                        {
+                            "family": family_name,
+                            "brine_a": name_a,
+                            "brine_b": name_b,
+                            "loading_a": loading_a,
+                            "loading_b": loading_b,
+                            "density_a": density_a,
+                            "density_b": density_b,
+                            "message": (
+                                f"{family_name}: recipe says {name_a} "
+                                f"({loading_a:.3f} g/mL) is "
+                                f"{'more' if more_concentrated else 'less'} "
+                                f"concentrated than {name_b} ({loading_b:.3f} g/mL), "
+                                f"but the measured density says the opposite "
+                                f"({density_a:.4f} vs {density_b:.4f} g/mL). "
+                                f"One of the two recorded values is wrong."
+                            ),
+                        }
+                    )
+    return problems
+
+
+def check_against_water_activity(table, tolerance=0.01):
+    """Cross-check derived concentrations against measured water activity.
+
+    This is the stronger of the two checks, because water activity is measured
+    on a separate instrument from anything used to make the brine, so it is a
+    genuinely independent witness. Adding salt lowers water activity, without
+    exception. Within a family of brines made from the same salt, ranking by
+    ionic strength must therefore give the reverse of ranking by measured water
+    activity.
+
+    Where it does not, believe the water activity. It is a direct measurement
+    of the quantity that actually drives the inhibition being modelled, whereas
+    the ionic strength is derived from a recipe through several arithmetic steps
+    any one of which can carry a transcription error.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Output of :func:`build_batch_table`.
+    tolerance : float
+        Water activities closer together than this are treated as equal, since
+        the batches concerned were intended to match.
+
+    Returns
+    -------
+    list of dict
+        One entry per contradiction, empty when consistent.
+    """
+    problems = []
+
+    def family_of(brine_name):
+        name = str(brine_name)
+        if name.startswith("SW"):
+            return "sea salt"
+        if name.startswith("Na_"):
+            return "NaCl"
+        if name.startswith("Mg_"):
+            return "MgCl2"
+        return None
+
+    working = table.copy()
+    working["Family"] = working["Brine Name"].map(family_of)
+
+    for family, group in working.dropna(subset=["Family"]).groupby("Family"):
+        rows = [
+            row
+            for _, row in group.dropna(subset=["Measured Water Activity"]).iterrows()
+        ]
+        for i, row_a in enumerate(rows):
+            for row_b in rows[i + 1 :]:
+                aw_a = float(row_a["Measured Water Activity"])
+                aw_b = float(row_b["Measured Water Activity"])
+                strength_a = float(row_a["Ionic Strength"])
+                strength_b = float(row_b["Ionic Strength"])
+
+                if abs(aw_a - aw_b) < tolerance:
+                    continue
+                if abs(strength_a - strength_b) < 1e-6:
+                    continue
+
+                saltier = strength_a > strength_b
+                drier = aw_a < aw_b
+                if saltier != drier:
+                    name_a = row_a["Brine Name"]
+                    name_b = row_b["Brine Name"]
+                    # Name the brine the recipe overstates, so the message points
+                    # at the row to go and check.
+                    if saltier:
+                        overstated, other = name_a, name_b
+                        overstated_i, other_i = strength_a, strength_b
+                        overstated_aw, other_aw = aw_a, aw_b
+                    else:
+                        overstated, other = name_b, name_a
+                        overstated_i, other_i = strength_b, strength_a
+                        overstated_aw, other_aw = aw_b, aw_a
+                    problems.append(
+                        {
+                            "family": family,
+                            "brine_a": name_a,
+                            "brine_b": name_b,
+                            "overstated": overstated,
+                            "message": (
+                                f"{family}: the recipe makes {overstated} saltier "
+                                f"than {other} (ionic strength {overstated_i:.2f} vs "
+                                f"{other_i:.2f} mol/L), but {overstated} has the "
+                                f"higher measured water activity "
+                                f"({overstated_aw:.4f} vs {other_aw:.4f}), so it is "
+                                f"really the weaker brine. The recipe for "
+                                f"{overstated} overstates its concentration."
+                            ),
+                        }
+                    )
+    return problems
+
+
 def ionic_strength(molarities):
     """Ionic strength, I = 0.5 * sum(c_i * z_i^2), in mol/L.
 
@@ -283,7 +490,8 @@ def ionic_strength(molarities):
     they sit.
     """
     return 0.5 * sum(
-        concentration * _ION_CHARGE[ion] ** 2 for ion, concentration in molarities.items()
+        concentration * _ION_CHARGE[ion] ** 2
+        for ion, concentration in molarities.items()
     )
 
 
@@ -336,6 +544,21 @@ def main():
     args = parser.parse_args()
 
     table = build_batch_table(args.experiments)
+
+    density_problems = check_recipe_consistency()
+    activity_problems = check_against_water_activity(table)
+
+    if density_problems or activity_problems:
+        print("RECIPE CONSISTENCY WARNINGS")
+        print("A deck built from an affected brine will sit at the wrong salinity,")
+        print("and will then disagree with the measurements for a reason that has")
+        print("nothing to do with the science. Resolve at the bench record first.")
+        print()
+        for problem in density_problems:
+            print(f"  [density]  {problem['message']}")
+        for problem in activity_problems:
+            print(f"  [activity] {problem['message']}")
+        print()
 
     output_dir = os.path.dirname(args.output)
     if output_dir:
