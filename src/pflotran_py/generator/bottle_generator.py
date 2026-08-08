@@ -360,6 +360,30 @@ METHANE_GAS_SPECIES = "CH4(g)"
 _HANFORD_METHANE_GAS_LINE = "'CH4(g)' 0.0000 1 1.0000 'Methane(aq)'"
 _BOTTLE_METHANE_GAS_LINE = "'CH4(g)' 0.0000 1 1.0000 'CH4(aq)'"
 
+# A mineral record in this database reads
+#
+#     'name' molar_volume n_species [coefficient 'species'] x n  logK x 8  molar_mass
+#
+# The Cellulose_min record does not. It declares two species but supplies two
+# more fields than that implies, and the second species carries a coefficient of
+# zero, which PFLOTRAN drops. The parser then finds one species where the header
+# promised two and stops with "Number of reaction species does not match
+# original: 1 2".
+#
+# The repair declares the one species the record actually describes and removes
+# the two surplus fields. The chemistry is untouched: Cellulose_min still
+# dissolves to one DOM1 with a log K of zero at every tabulated temperature.
+# This record is unused by the existing decks, which is presumably why the
+# malformation has gone unnoticed.
+_HANFORD_CELLULOSE_LINE = (
+    "'Cellulose_min' 162.14 2 1.0000 'DOM1' 0.0000 'H+' "
+    "0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0 0.0 162.1400"
+)
+_BOTTLE_CELLULOSE_LINE = (
+    "'Cellulose_min' 162.14 1 1.0000 'DOM1' "
+    "0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 162.1400"
+)
+
 
 def bottle_database_path():
     """Path to the database used by closed-batch decks."""
@@ -391,9 +415,7 @@ def write_bottle_database(source_path=None, destination_path=None):
     with open(source_path) as handle:
         text = handle.read()
 
-    if _HANFORD_METHANE_GAS_LINE not in text:
-        if _BOTTLE_METHANE_GAS_LINE in text:
-            return destination_path
+    if _HANFORD_METHANE_GAS_LINE not in text and _BOTTLE_METHANE_GAS_LINE not in text:
         raise ValueError(
             f"No CH4(g) entry pairing with Methane(aq) found in {source_path}; "
             "the database format may have changed. Refusing to write a bottle "
@@ -401,6 +423,7 @@ def write_bottle_database(source_path=None, destination_path=None):
         )
 
     text = text.replace(_HANFORD_METHANE_GAS_LINE, _BOTTLE_METHANE_GAS_LINE)
+    text = text.replace(_HANFORD_CELLULOSE_LINE, _BOTTLE_CELLULOSE_LINE)
     with open(destination_path, "w") as handle:
         handle.write(text)
     return destination_path

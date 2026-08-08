@@ -277,3 +277,72 @@ def test_salinity_inhibition_does_not_touch_the_oxidation_steps(tmp_path):
     deck = _salted_deck(tmp_path)
     methane_oxidation = deck[deck.index("methane oxidation (O2)") :][:600]
     assert "TYPE SMOOTHSTEP" not in methane_oxidation
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Carbon inventory
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_carbon_stays_dissolved_by_default(deck):
+    """Existing decks are unchanged unless hydrolysis is asked for."""
+    assert "Cellulose_min" not in deck
+    assert "DOM1                5.00 T" in deck
+
+
+def _hydrolysis_deck(tmp_path, **spec):
+    path = tmp_path / "hydrolysis.in"
+    BottleGenerator(brine=nacl_brine(molality=2.7), cellulose_hydrolysis=spec).generate(
+        str(path)
+    )
+    return path.read_text()
+
+
+def test_an_empty_dict_switches_hydrolysis_on(tmp_path):
+    """An empty dict means "on, with the defaults". Testing the option for
+    truthiness rather than for None would read it as "off" and silently do
+    nothing, which is how this was first written and first broke."""
+    deck = _hydrolysis_deck(tmp_path)
+    assert "Cellulose_min" in deck
+
+
+def test_hydrolysis_moves_carbon_out_of_solution(tmp_path):
+    """The dissolved pool drops from molar to millimolar, and the bulk of the
+    carbon moves into a solid that dissolves into it."""
+    deck = _hydrolysis_deck(tmp_path)
+    assert "DOM1                5.00 T" not in deck
+    assert "DOM1                1.00d-03 T" in deck
+
+
+def test_hydrolysis_declares_the_mineral_everywhere_it_is_needed(tmp_path):
+    """A mineral has to appear in the MINERALS list, in MINERAL_KINETICS and in
+    the constraint, or PFLOTRAN either ignores it or refuses the deck."""
+    deck = _hydrolysis_deck(tmp_path)
+    assert deck.count("Cellulose_min") >= 3
+    assert "RATE_CONSTANT  2.d-8 mol/m^2-sec" in deck
+
+
+def test_hydrolysis_rate_is_overridable(tmp_path):
+    deck = _hydrolysis_deck(tmp_path, rate_constant="5.d-9")
+    assert "RATE_CONSTANT  5.d-9 mol/m^2-sec" in deck
+
+
+def test_the_bottle_database_repairs_the_cellulose_record(tmp_path):
+    """The record in hanford.dat declares two species but carries two surplus
+    fields, and its second species has a zero coefficient that PFLOTRAN drops.
+    The deck is then refused with a species-count mismatch. Left unrepaired,
+    hydrolysis cannot run at all."""
+    from pflotran_py.generator.bottle_generator import (
+        bottle_database_path,
+        write_bottle_database,
+    )
+
+    path = write_bottle_database(destination_path=str(tmp_path / "db.dat"))
+    line = next(line for line in open(path) if line.startswith("'Cellulose_min'"))
+    fields = line.split()
+    species_count = int(fields[2])
+    # name, molar volume, count, one pair per species, eight log K, molar mass
+    assert len(fields) == 3 + 2 * species_count + 8 + 1
+    assert species_count == 1
+    assert "'DOM1'" in line
+    assert bottle_database_path().endswith("hanford_bottle.dat")

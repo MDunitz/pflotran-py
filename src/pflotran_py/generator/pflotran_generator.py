@@ -153,6 +153,34 @@ TRACE_SPECIES = [
 # has to be attached to these to have any effect on modelled methane; attaching
 # it anywhere else -- as the AWINHIBIT sandboxes effectively do -- leaves the
 # production pathways untouched.
+# Solid carbon pool that hydrolyses to dissolved organic matter. The mineral
+# and its reaction are already in hanford.dat; only the kinetics and the
+# starting inventory are set here.
+DEFAULT_CELLULOSE_HYDROLYSIS = {
+    "mineral": "Cellulose_min",
+    # Volume fraction of the bulk. At the mineral's 162.14 cm3/mol molar
+    # volume, 0.2 holds about 1.2 mol/L of bulk as glucose equivalents --
+    # several times the 0.22 mol/L the model consumed over 130 days when DOM1
+    # was an unlimited pool, so carbon supply does not become the accidental
+    # limit.
+    "volume_fraction": 0.2,
+    "surface_area": "1.0e2",
+    # Chosen so that hydrolysis supplies carbon on the same timescale the
+    # network consumes it, rather than instantly. This is the parameter that
+    # makes hydrolysis rate-limiting, which is the point of the change.
+    #
+    # Tuned by sweep. At 2.d-7 the dissolved pool still reaches 0.57 mol/L and
+    # keeps depressing water activity; at 2.d-10 carbon supply itself becomes
+    # the limit and modelled methane falls fivefold. At 2.d-8 the unsalted
+    # bottle holds 0.032 mol/L of dissolved organic matter, which is what an
+    # active sludge porewater looks like, and its water activity comes out at
+    # 0.9927 against a measured 1.000.
+    "rate_constant": "2.d-8",
+    # What remains dissolved. Millimolar rather than molar, which is what
+    # sludge porewater dissolved organic carbon actually looks like.
+    "dom1_initial": "1.00d-03 T",
+}
+
 METHANOGENESIS_RATE_KEYS = (
     "methylotrophic_methano",
     "hydrogenotrophic_methano",
@@ -277,6 +305,38 @@ class PFLOTRANGenerator:
         #
         # Defaults to None, leaving every existing deck unchanged.
         salinity_inhibition=None,
+        # --- Carbon inventory ---
+        # Where the substrate carbon lives: dissolved, or in a solid pool that
+        # hydrolyses into solution.
+        #
+        # The decks carry DOM1 at 5 mol/L. DOM1 is glucose (hanford.dat gives
+        # its molar mass as 180.1566 and labels the related solid pool
+        # "TAO-glucose"), so 5 mol/L is 901 g/L, which is glucose's solubility
+        # limit -- the bottles are modelled as saturated syrup. Two things
+        # follow, and both matter.
+        #
+        # First, PFLOTRAN computes water activity as 1 - 0.017 * sum of all
+        # solute molalities, so at 5 mol/L the glucose contributes about ninety
+        # percent of the osmolality in an unsalted bottle. The model's control
+        # sits at a water activity of 0.909 while the meter reads 1.000, and
+        # the range across all conditions is compressed from the measured 0.176
+        # to 0.099. Any inhibition keyed to water activity is therefore reading
+        # an axis set mostly by the organic pool rather than by the salt.
+        #
+        # Second, DOM1 falls only from 5.00 to 4.78 over 130 days, so it acts
+        # as an unlimited reservoir rather than a substrate, which is part of
+        # why modelled yield barely responds to inhibition.
+        #
+        # Setting this switches the carbon into a solid Cellulose_min pool that
+        # dissolves to DOM1 kinetically, leaving only a small dissolved pool.
+        # The database already carries the reaction (Cellulose_min -> 1 DOM1),
+        # so this adds no new chemistry. Pass a dict to override any of::
+        #
+        #     {"volume_fraction": 0.2, "surface_area": "1.0e2",
+        #      "rate_constant": "2.d-7", "dom1_initial": "1.00d-03 T"}
+        #
+        # Defaults to None, leaving the carbon inventory as it was.
+        cellulose_hydrolysis=None,
         # --- Paths ---
         database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
@@ -305,6 +365,17 @@ class PFLOTRANGenerator:
         # Chemistry configuration
         self.couple_carbonate = couple_carbonate
         self.salinity_inhibition = salinity_inhibition
+
+        # Tested against None rather than truthiness, so that passing an empty
+        # dict means "switch this on with the defaults" rather than silently
+        # meaning "off".
+        self.cellulose_hydrolysis = (
+            None
+            if cellulose_hydrolysis is None
+            else {**DEFAULT_CELLULOSE_HYDROLYSIS, **cellulose_hydrolysis}
+        )
+        if self.cellulose_hydrolysis:
+            self.concentrations["DOM1"] = self.cellulose_hydrolysis["dom1_initial"]
 
         # Domain
         self.dimensions = dimensions.lower()
@@ -351,9 +422,29 @@ class PFLOTRANGenerator:
         """
         return True
 
+    def _build_constraint_cellulose(self):
+        """Initial solid carbon inventory line for the constraint block."""
+        spec = self.cellulose_hydrolysis
+        if not spec:
+            return []
+        return [
+            f'    {spec["mineral"]:<20}{spec["volume_fraction"]}  '
+            f'{spec["surface_area"]} m^2/m^3'
+        ]
+
     def _build_mineral_kinetics_and_sorption(self):
         """Mineral kinetics, immobile species, gas species and sorption."""
-        return MINERAL_KINETICS_AND_SORPTION
+        block = MINERAL_KINETICS_AND_SORPTION
+        spec = self.cellulose_hydrolysis
+        if not spec:
+            return block
+        return block.replace(
+            "      MgCl2.H2O\n        RATE_CONSTANT  1.d-6 mol/m^2-sec\n      /\n",
+            "      MgCl2.H2O\n        RATE_CONSTANT  1.d-6 mol/m^2-sec\n      /\n"
+            f'      {spec["mineral"]}\n'
+            f'        RATE_CONSTANT  {spec["rate_constant"]} mol/m^2-sec\n'
+            "      /\n",
+        )
 
     def _build_chemistry_output(self):
         """Closing CHEMISTRY block: output requests and the database path."""
@@ -389,8 +480,12 @@ class PFLOTRANGenerator:
             lines.append(f"  {s}")
         lines.append("/")
 
+        minerals = list(MINERALS)
+        if self.cellulose_hydrolysis:
+            minerals.append(self.cellulose_hydrolysis["mineral"])
+
         lines.append("MINERALS")
-        for m in MINERALS:
+        for m in minerals:
             lines.append(f"  {m}")
         lines.append("/")
         return "\n".join(lines)
@@ -540,6 +635,7 @@ class PFLOTRANGenerator:
                 "    Fe(OH)2             7.2d-1  1.d2 m^2/m^3",
                 "    Rock(s)             0.5  5.0e3 m^2/m^3",
                 "    MgCl2.H2O           1.0d-02  1.0e2 m^2/m^3",
+                *self._build_constraint_cellulose(),
                 "  /",
                 "END",
             ]

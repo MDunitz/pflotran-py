@@ -163,7 +163,42 @@ def main():
         default=None,
         help="Restrict to these experiment IDs.",
     )
+    parser.add_argument(
+        "--cellulose-hydrolysis",
+        action="store_true",
+        help=(
+            "Hold the substrate carbon in a solid pool that hydrolyses into "
+            "solution, instead of as 5 mol/L of dissolved glucose. Stops the "
+            "organic pool from setting the water activity."
+        ),
+    )
+    parser.add_argument(
+        "--salinity-threshold",
+        type=float,
+        default=None,
+        help=(
+            "Chloride concentration [mol/L] at which to centre a sigmoidal "
+            "inhibition on the network's methanogenesis reactions. Omit to "
+            "leave the network's inhibition as it is."
+        ),
+    )
+    parser.add_argument(
+        "--salinity-interval",
+        type=float,
+        default=0.5,
+        help="Width of that transition, in decades.",
+    )
     args = parser.parse_args()
+
+    extra = {}
+    if args.cellulose_hydrolysis:
+        extra["cellulose_hydrolysis"] = {}
+    if args.salinity_threshold is not None:
+        extra["salinity_inhibition"] = {
+            "species": "Cl-",
+            "threshold": args.salinity_threshold,
+            "interval": args.salinity_interval,
+        }
 
     if os.path.exists(args.composition):
         table = pd.read_csv(args.composition)
@@ -179,6 +214,7 @@ def main():
         output_dir=args.output_dir,
         final_time_days=args.final_time_days,
         aw_threshold=args.aw_threshold,
+        **extra,
     )
 
     print()

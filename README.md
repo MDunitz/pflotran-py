@@ -514,6 +514,52 @@ composition reverse-engineered from the measured water activity would hand the
 model part of its own answer. Building from the recipe keeps the measured water
 activity as an independent check.
 
+### Two further options for the carbon inventory and the inhibition
+
+Both default off, so nothing changes unless asked for.
+
+**`cellulose_hydrolysis`** holds the substrate carbon in a solid pool that
+dissolves into solution, rather than as 5 mol/L of dissolved DOM1. This matters
+because DOM1 is glucose -- the database gives its molar mass as 180.1566 and
+labels the related solid pool "TAO-glucose" -- so 5 mol/L is 901 g/L, which is
+glucose's solubility limit. PFLOTRAN computes water activity as
+`1 - 0.017 * sum(molality)`, counting every solute, so at that concentration the
+organic pool contributed about ninety percent of the osmolality in an unsalted
+bottle: the model's control sat at a water activity of 0.909 while the meter
+read 1.000. With hydrolysis on, the unsalted bottle holds 0.032 mol/L of
+dissolved organic matter and comes out at 0.9927, and water activity becomes 85
+to 90 percent salt-driven in the salted bottles instead of 5 to 55 percent.
+
+This uses the `Cellulose_min` record already in the database, which needed one
+repair: it declares two species but carries two surplus fields, and its second
+species has a coefficient of zero that PFLOTRAN drops, so the deck is refused
+with a species-count mismatch. `write_bottle_database()` fixes the record
+alongside the methane one, leaving the chemistry unchanged.
+
+**`salinity_inhibition`** adds a sigmoidal inhibition term to the network's
+three methane-producing reactions:
+
+```python
+salinity_inhibition={"species": "Cl-", "threshold": 1.0, "interval": 0.5}
+```
+
+It exists because the AWINHIBIT sandboxes do not inhibit the reaction network.
+They add their own parallel copies of the three methanogenesis pathways, at a
+rate constant of 1e-10 against the network's 9.1e-6 for the methylotrophic
+route, and inhibit only those. Raising the sandbox threshold to 0.92 -- above
+the model's computed water activity in every bottle -- changes modelled methane
+by under one percent.
+
+`TYPE SMOOTHSTEP` rather than `MONOD` is deliberate. Monod inhibition is
+hyperbolic and delivers at most about twentyfold across these brines at any
+half-saturation value, while the measurements fall four orders of magnitude. A
+sigmoid can express a collapse.
+
+A literal water-activity term is not reachable from a deck: `INHIBITION` reads a
+`SPECIES_NAME`, and water activity is not a species. PFLOTRAN computes it
+separately from the `H2O` primary species, which these decks constrain to
+1e-3 mol/L. Chloride is used instead, which in this model is a monotone proxy.
+
 ### Running it
 
 ```bash
@@ -521,7 +567,8 @@ activity as an independent check.
 python -m pflotran_py.comparison.brines --output data/incubation_batch_composition.csv
 
 # 2. Build one closed-batch deck per measured batch.
-python -m pflotran_py.comparison.decks --output-dir decks
+python -m pflotran_py.comparison.decks --output-dir decks \
+    --cellulose-hydrolysis --salinity-threshold 1.0 --salinity-interval 0.5
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean

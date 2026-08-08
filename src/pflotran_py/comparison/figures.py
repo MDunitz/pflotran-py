@@ -1,6 +1,6 @@
 """Figures comparing the closed-batch model against the measured incubations.
 
-Three figures, each answering a different question.
+Four figures, each answering a different question.
 
 **Methane over time** asks whether the model reproduces the measured trajectory
 in each bottle. Measured replicates are drawn as points, the model as a line,
@@ -12,9 +12,14 @@ around: does production fall as salt rises, and does the model fall with it?
 This is the figure that shows whether the inhibition in the model matches the
 inhibition in the bottles.
 
-**Carbon dioxide** is presented separately and with a caveat rather than as a
-like-for-like comparison, because the reaction network as configured cannot
-produce a headspace carbon dioxide prediction. See :func:`plot_carbon_dioxide`.
+**Carbon dioxide** shows the measured series beside the model's carbon
+production. Whether these are comparable depends on how the deck was built: a
+deck with coupled carbonate predicts headspace carbon dioxide and a deck
+without one cannot. See :func:`plot_carbon_dioxide`.
+
+**Measured against modelled** puts the two on opposite axes with the line of
+equality drawn, one point per batch condition. It is the most direct reading of
+how well the model does and in which direction it errs.
 
 Every colour comes from ``palette.json`` in this directory, whose anchors are
 the colourblind-safe values adopted across the measurement repository. Hue
@@ -38,6 +43,7 @@ from ..analysis.extract import extract_pflotran_data_hdf5  # noqa: E402
 from ..analysis.extract import find_hdf5_output  # noqa: E402
 from .headspace import (  # noqa: E402
     GASES,
+    aqueous_concentration_to_headspace_moles,
     model_headspace_moles,
     setschenow_salts_from_composition,
 )
@@ -566,6 +572,199 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
     return output_path
 
 
+# ═════════════════════════════════════════════════════════════════════
+# Figure 4 -- measured against modelled, directly
+# ═════════════════════════════════════════════════════════════════════
+
+COUPLED_CARBON_DIOXIDE_COLUMN = "CO2(aq) [M]"
+
+
+def model_carbon_dioxide_headspace(run_frame, batch_row):
+    """Model headspace carbon dioxide, or None if the deck cannot predict it.
+
+    Requires a deck built with coupled carbonate. Without it the model reports
+    dissolved carbon dioxide as an independent primary species that no reaction
+    produces, so it never leaves its initial value and there is nothing to
+    compare.
+    """
+    if COUPLED_CARBON_DIOXIDE_COLUMN not in run_frame.columns:
+        return None
+    nacl, mgcl2 = setschenow_salts_from_composition(batch_row)
+    final = run_frame.iloc[-1][COUPLED_CARBON_DIOXIDE_COLUMN]
+    return aqueous_concentration_to_headspace_moles(
+        final, GASES["CO2"], nacl_molarity=nacl, mgcl2_molarity=mgcl2
+    ).to_value(u.mol)
+
+
+def plot_measured_against_modelled(paired, ecsv_glob, output_path):
+    """Measured on one axis, modelled on the other, with the line of equality.
+
+    The most direct reading of the comparison. A point on the diagonal is a
+    condition the model gets right; distance from the diagonal is how wrong it
+    is, and in which direction. Because both axes are logarithmic and span four
+    orders of magnitude, the shaded band marks agreement within a factor of ten
+    -- generous, but the honest resolution of a comparison whose inputs carry
+    the uncertainties described in the module docstring.
+    """
+    measured_co2 = load_measured(ecsv_glob, "CO2")
+
+    figure, (left, right) = plt.subplots(1, 2, figsize=(13.5, 6.4))
+
+    panels = [
+        (left, "Methane", None),
+        (right, "Carbon dioxide", measured_co2),
+    ]
+
+    for axis, gas_label, co2_frame in panels:
+        pairs = []
+        for entry in paired:
+            batch = entry["batch"]
+            colour = colour_for_brine(batch["Brine Name"])
+
+            if gas_label == "Methane":
+                _, series = model_methane_headspace(entry["model"], batch)
+                modelled = series[-1]
+                points = entry["measured"]
+            else:
+                modelled = model_carbon_dioxide_headspace(entry["model"], batch)
+                points = co2_frame[
+                    (co2_frame["Experiment"] == batch["Experiment"])
+                    & (co2_frame["Batch ID"] == batch["Batch ID"])
+                ]
+            if modelled is None or not len(points):
+                continue
+
+            final = (
+                points.sort_values("Days since start")
+                .groupby("Replicate ID")["Cumulative Moles"]
+                .last()
+            )
+            measured = float(np.median(final))
+            if measured <= 0 or modelled <= 0:
+                continue
+
+            pairs.append((measured, modelled))
+            axis.scatter(
+                measured,
+                modelled,
+                color=colour,
+                s=95,
+                edgecolor="white",
+                linewidth=0.9,
+                zorder=3,
+            )
+
+        if not pairs:
+            continue
+
+        values = np.array(pairs)
+        low = min(values.min() * 0.3, 1e-8)
+        high = values.max() * 3
+        line = np.array([low, high])
+
+        axis.fill_between(
+            line,
+            line / 10,
+            line * 10,
+            color=PALETTE["guide_light"],
+            alpha=0.28,
+            zorder=0,
+        )
+        axis.plot(line, line, color=PALETTE["guide"], linewidth=1.4, zorder=1)
+
+        axis.set_xscale("log")
+        axis.set_yscale("log")
+        axis.set_xlim(low, high)
+        axis.set_ylim(low, high)
+        axis.set_aspect("equal")
+        axis.set_xlabel(f"Measured {gas_label.lower()} in the headspace (moles)")
+        axis.set_ylabel(f"Modelled {gas_label.lower()} in the headspace (moles)")
+
+        ratios = np.log10(values[:, 1] / values[:, 0])
+        within = np.mean(np.abs(ratios) <= 1)
+        axis.set_title(
+            f"{gas_label}\n{within:.0%} of conditions within a factor of ten",
+            fontsize=12,
+        )
+        axis.grid(True, alpha=0.22, linewidth=0.5)
+
+        axis.text(
+            0.04,
+            0.94,
+            "model over-predicts",
+            transform=axis.transAxes,
+            fontsize=8,
+            color=PALETTE["guide"],
+        )
+        axis.text(
+            0.55,
+            0.05,
+            "model under-predicts",
+            transform=axis.transAxes,
+            fontsize=8,
+            color=PALETTE["guide"],
+        )
+
+    handles = [
+        plt.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            color=PALETTE["control"],
+            markersize=9,
+            label="No added salt",
+        ),
+        plt.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            color=PALETTE["nacl_mid"],
+            markersize=9,
+            label="Sodium chloride",
+        ),
+        plt.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            color=PALETTE["mgcl2_mid"],
+            markersize=9,
+            label="Magnesium chloride",
+        ),
+        plt.Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+            color=PALETTE["seasalt_mid"],
+            markersize=9,
+            label="Artificial sea salt",
+        ),
+        plt.Line2D(
+            [], [], linestyle="-", color=PALETTE["guide"], label="Exact agreement"
+        ),
+    ]
+    figure.legend(
+        handles=handles,
+        fontsize=9,
+        ncol=5,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.02),
+    )
+
+    figure.suptitle(
+        "Measured against modelled production, one point per batch condition",
+        fontsize=13.5,
+        y=0.98,
+    )
+    figure.tight_layout(rect=[0, 0.09, 1, 0.95])
+    figure.savefig(output_path, dpi=200)
+    plt.close(figure)
+    return output_path
+
+
 def main():
     import argparse
 
@@ -602,6 +801,11 @@ def main():
         ),
         plot_carbon_dioxide(
             paired, args.ecsv_glob, os.path.join(args.output_dir, "carbon_dioxide.png")
+        ),
+        plot_measured_against_modelled(
+            paired,
+            args.ecsv_glob,
+            os.path.join(args.output_dir, "measured_vs_modelled.png"),
         ),
     ]
 
