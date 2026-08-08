@@ -540,8 +540,11 @@ alongside the methane one, leaving the chemistry unchanged.
 three methane-producing reactions:
 
 ```python
-salinity_inhibition={"species": "Cl-", "threshold": 1.0, "interval": 0.5}
+salinity_inhibition={"species": "Cl-", "threshold": 0.75, "interval": 1.0}
 ```
+
+Those two numbers are fitted. See "Which numbers were fitted, and which were
+not" below for how, and for the held-out test.
 
 It exists because the AWINHIBIT sandboxes do not inhibit the reaction network.
 They add their own parallel copies of the three methanogenesis pathways, at a
@@ -568,7 +571,7 @@ python -m pflotran_py.comparison.brines --output data/incubation_batch_compositi
 
 # 2. Build one closed-batch deck per measured batch.
 python -m pflotran_py.comparison.decks --output-dir decks \
-    --cellulose-hydrolysis --salinity-threshold 1.0 --salinity-interval 0.5
+    --cellulose-hydrolysis --salinity-threshold 0.75 --salinity-interval 1.0
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
@@ -618,29 +621,115 @@ strength near 0.7 mol/L while these brines run from 1.2 to 5.8 mol/L. That is an
 extrapolation of up to eightfold, and the result would look like a measurement
 while being closer to a guess.
 
+### Which numbers were fitted, and which were not
+
+Read this before quoting any agreement statistic from this comparison.
+
+**Three parameters were fitted against the measurements. Everything else was
+not.**
+
+| Parameter | Value | Fitted against | How |
+|---|---|---|---|
+| Salinity inhibition threshold | 0.75 mol/L Cl⁻ | Exp004 methane | Grid search, 24 combinations |
+| Salinity inhibition interval | 1.0 decades | Exp004 methane | Same grid search |
+| Cellulose hydrolysis rate | `2.d-8` mol/m²/s | Exp004 **water activity**, not methane | Sweep of four values |
+
+The first two were selected by `pflotran_py.comparison.calibrate`, which fixes
+the objective and the grid in advance, runs every combination on Exp004 alone,
+and takes the arithmetic minimum. The objective is the root mean squared error
+of log10(modelled/measured) across Exp004's seven batches.
+
+The third was chosen so that the unsalted bottle's modelled water activity
+matched the meter reading of 1.000, and so that the dissolved organic pool
+landed at a concentration an active sludge porewater plausibly holds. Methane
+was not consulted. A faster rate leaves the organic pool depressing water
+activity; a slower one makes carbon supply itself the limiting factor.
+
+A fourth number, the solid carbon volume fraction of 0.2, was reasoned rather
+than fitted: it holds several times the carbon the network consumes over 130
+days, so that supply does not become an accidental limit.
+
+**Not fitted, and not adjusted at any point:** the sixteen-reaction network and
+every rate constant and half-saturation in it (see `generator/REFERENCES.md`),
+the Henry solubilities and Setschenow coefficients, all fifteen brine
+compositions (derived from the weighed recipes), the bottle geometry, the
+temperature, and the run duration. Nor are the four structural changes fits --
+sealing the domain, giving methane a gas phase, coupling carbonate, and moving
+carbon into a solid pool each correct a specific defect and introduce no free
+parameter. Each was checked against something independent: chloride retention,
+agreement between PFLOTRAN's internal methane partition and Henry's law to
+within 16 percent, mass conservation across deck versions, and the measured
+water activity of the control.
+
+**Carbon dioxide has no fitted parameters at all.** Nothing was ever tuned
+against it. Its panel in the parity figure is a parameter-free prediction,
+though an indirect one: the hydrolysis rate and the methane inhibition both
+change how carbon is routed.
+
+### Fitting on one experiment and testing on the other
+
+```bash
+python -m pflotran_py.comparison.calibrate
+```
+
+Exp004 uses sodium chloride and magnesium chloride brines; Exp003 uses
+artificial sea salt, which carries sulfate and a different divalent balance.
+Parameters fitted on the first and applied unchanged to the second are being
+asked to transfer across salt chemistry, not merely across replicates.
+
+| | batches | score | median miss | within a factor of ten |
+|---|---|---|---|---|
+| Exp004, fitted on | 7 | 0.79 | — | — |
+| Exp003, held out | 8 | **1.01** | factor of 7.6 | 50% |
+
+The score degrades from 0.79 to 1.01 on transfer, which is the expected
+direction and a modest amount: a typical miss grows from about sixfold to about
+tenfold.
+
+Two things temper this. The objective surface is flat -- seven of the
+twenty-four grid points score between 0.79 and 0.80 -- so the two parameters are
+only weakly identified, and a different tie-break would have chosen differently
+without changing the fit quality. And the held-out misses are not random: the
+model under-predicts almost every sea-salt condition, worst at the mid strength
+by a factor of about forty. Sea salt carries sulfate, so sulfate reduction is
+already competing with methanogenesis there, and a chloride-keyed inhibition
+term penalises those bottles a second time for the same salt.
+
+**This is a pre-registered protocol, not a blind prediction.** Exp003 was
+examined during the work that produced this design, and that knowledge cannot be
+unlearned; it can leak into choices as ordinary as which grid to sweep. Read the
+held-out number as evidence about whether two parameters transfer across salt
+systems, which it can genuinely answer, and not as a forecast of unseen data,
+which it cannot.
+
 ### What the comparison currently shows
 
-With the closed deck, the gas phase and the corrected conversion, the model
-reproduces the unsalted bottles to within a factor of a few, and at the mildest
-salt condition it lands almost exactly on the measurements.
+With the domain sealed, a real methane gas phase, coupled carbonate, the carbon
+moved into a solid pool and the fitted salinity inhibition, the model spans a
+range of about 1900-fold from the unsalted bottles to the strongest brine,
+against a measured 16000-fold. Before these changes it spanned threefold. Sixty
+percent of methane conditions fall within a factor of ten of measurement.
 
-It then fails as salt rises, and fails in a specific way. Across the full range
-of measured conditions the model's methane falls by about a factor of three,
-while the measurements fall by three to four orders of magnitude. The
-overprediction grows from roughly unity at the mildest brine to several hundred
-at the strongest.
+The residual error is mostly a systematic under-prediction: nearly every point
+sits below the line of equality, most of all in the unsalted controls, which is
+what hydrolysis becoming rate-limiting looks like. That is a more tractable kind
+of wrongness than the original problem, which was a missing mechanism rather
+than a miscalibrated one.
 
-The water-activity sandboxes cannot be the explanation. Every measured batch
-sits at a water activity of 0.824 or above, against a default sandbox threshold
-of 0.5, so they never engage on this data at all. Nor is the chloride Monod term
-carrying it: two batches at essentially the same chloride concentration, one
-sea-salt and one sodium-chloride, receive noticeably different treatment,
-because what actually differs between them is sulfate. The only meaningful salt
-response the model currently has is sulfate reduction outcompeting
-methanogenesis.
+The water-activity sandboxes remain disconnected from all of this. They inhibit
+their own parallel methanogenesis pathways rather than the network's, at a rate
+constant five orders of magnitude smaller, so raising their threshold until they
+are fully engaged in every bottle still changes modelled methane by under one
+percent. Making them the mechanism rather than a bystander would mean giving
+them the network's rate laws and removing the network's own methanogenesis, so
+that the two do not double-count.
 
-The clearest next experiment is therefore the sandbox threshold, which at 0.5 is
-untestable against a dataset that never goes below 0.824.
+One limit is not addressable from a deck. PFLOTRAN computes water activity as
+`1 - 0.017 * sum(molality)`, ideal Raoult with no osmotic coefficient, so it
+cannot capture the non-ideality of concentrated brine: the strongest magnesium
+chloride bottle computes 0.884 against a measured 0.824. Water activity is now a
+salt-driven quantity and a usable diagnostic, but it is systematically too high
+at the salty end, and correcting that is a Fortran change.
 
 ---
 
