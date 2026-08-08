@@ -12,10 +12,10 @@ around: does production fall as salt rises, and does the model fall with it?
 This is the figure that shows whether the inhibition in the model matches the
 inhibition in the bottles.
 
-**Carbon dioxide** shows the measured series beside the model's carbon
-production. Whether these are comparable depends on how the deck was built: a
-deck with coupled carbonate predicts headspace carbon dioxide and a deck
-without one cannot. See :func:`plot_carbon_dioxide`.
+**Carbon dioxide** overlays measured and modelled on shared axes, in the same
+layout as the methane figure. Decks built without coupled carbonate cannot be
+drawn this way and fall back to the measurements alone with the reason stated
+on the figure. See :func:`plot_carbon_dioxide`.
 
 **Measured against modelled** puts the two on opposite axes with the line of
 equality drawn, one point per batch condition. It is the most direct reading of
@@ -466,108 +466,174 @@ def plot_methane_against_water_activity(paired, output_path):
 # ═════════════════════════════════════════════════════════════════════
 
 
+COUPLED_CARBON_DIOXIDE_COLUMN = "CO2(aq) [M]"
+
+
+def model_carbon_dioxide_series(run_frame, batch_row):
+    """Model headspace carbon dioxide over time, or None if unavailable.
+
+    Returns None when the deck was built without coupled carbonate. In that
+    case the model carries dissolved carbon dioxide as an independent primary
+    species that no reaction produces, so it never moves from its initial value
+    and there is nothing to plot against a measurement.
+    """
+    if COUPLED_CARBON_DIOXIDE_COLUMN not in run_frame.columns:
+        return None, None
+    nacl, mgcl2 = setschenow_salts_from_composition(batch_row)
+    moles = [
+        aqueous_concentration_to_headspace_moles(
+            row[COUPLED_CARBON_DIOXIDE_COLUMN],
+            GASES["CO2"],
+            nacl_molarity=nacl,
+            mgcl2_molarity=mgcl2,
+        ).to_value(u.mol)
+        for _, row in run_frame.iterrows()
+    ]
+    return run_frame["Time [d]"].to_numpy(), np.array(moles)
+
+
+def model_carbon_dioxide_headspace(run_frame, batch_row):
+    """Model headspace carbon dioxide at the end of the run, or None."""
+    _, series = model_carbon_dioxide_series(run_frame, batch_row)
+    return None if series is None else series[-1]
+
+
 def plot_carbon_dioxide(paired, ecsv_glob, output_path):
-    """Measured carbon dioxide, beside the model's carbon production.
+    """Measured and modelled carbon dioxide in the headspace, over the incubation.
 
-    These two panels are deliberately not overlaid, because they are not the
-    same quantity and drawing them on one axis would imply a comparison that
-    cannot presently be made.
+    Overlaid on shared axes, in the same layout as the methane figure, because
+    with coupled carbonate the two are now the same quantity: PFLOTRAN speciates
+    internally and reports the neutral dissolved carbon dioxide, which Henry's
+    law turns into the headspace moles a gas chromatograph would sample.
 
-    The reason is in the reaction network. No reaction in it produces dissolved
-    carbon dioxide: every carbon-oxidising step yields bicarbonate instead, and
-    dissolved carbon dioxide is additionally held out of carbonate equilibrium
-    by the deck's decoupling list. Its concentration therefore never moves from
-    its initial value, and converting it through Henry's law -- the conversion
-    used for methane -- would predict no carbon dioxide accumulation at all.
-
-    What the model does predict is the rise in bicarbonate, which is where the
-    respired carbon actually goes. That is shown on the right. Turning it into a
-    headspace prediction needs carbonate speciation at brine ionic strength,
-    which is exactly the extrapolation the conversion module declines to make.
-
-    So the left panel is the measurement, the right panel is the model's carbon
-    production, and the gap between them is a task, not a result.
+    Decks built without coupled carbonate cannot be drawn this way. There the
+    model holds dissolved carbon dioxide as an independent primary species that
+    no reaction produces -- every carbon-oxidising step in the network yields
+    bicarbonate -- so its concentration never moves and an overlay would show a
+    flat line that means nothing. Those runs fall back to a single panel of the
+    measurements alone, with the reason stated on the figure rather than left
+    for the reader to infer from a suspiciously horizontal curve.
     """
     measured = load_measured(ecsv_glob, "CO2")
+    predictable = [
+        entry
+        for entry in paired
+        if COUPLED_CARBON_DIOXIDE_COLUMN in entry["model"].columns
+    ]
 
-    figure, (left, right) = plt.subplots(1, 2, figsize=(14, 5.5))
-
-    for entry in paired:
-        batch = entry["batch"]
-        colour = colour_for_brine(batch["Brine Name"])
-        label = f"{batch['Brine Name']} ({batch['Measured Water Activity']:.3f})"
-
-        points = measured[
-            (measured["Experiment"] == batch["Experiment"])
-            & (measured["Batch ID"] == batch["Batch ID"])
-        ]
-        if len(points):
-            left.scatter(
-                points["Days since start"],
-                points["Cumulative Moles"],
-                color=colour,
-                s=22,
-                edgecolor="white",
-                linewidth=0.4,
-                label=label,
-            )
-
-        run_frame = entry["model"]
-        right.plot(
-            run_frame["Time [d]"],
-            run_frame["Total HCO3- [M]"],
-            color=colour,
-            linewidth=2,
-            label=label,
+    if not predictable:
+        figure, axis = plt.subplots(figsize=(8, 5.5))
+        for entry in paired:
+            batch = entry["batch"]
+            points = measured[
+                (measured["Experiment"] == batch["Experiment"])
+                & (measured["Batch ID"] == batch["Batch ID"])
+            ]
+            if len(points):
+                axis.scatter(
+                    points["Days since start"],
+                    points["Cumulative Moles"],
+                    color=colour_for_brine(batch["Brine Name"]),
+                    s=24,
+                    edgecolor="white",
+                    linewidth=0.4,
+                )
+        axis.set_yscale("log")
+        axis.set_xlabel("Days since start of incubation")
+        axis.set_ylabel("Carbon dioxide in the headspace (moles)")
+        axis.set_title(
+            "Measured carbon dioxide; the model cannot predict it", fontsize=12
         )
+        axis.grid(True, alpha=0.25, linewidth=0.5)
+        figure.text(
+            0.5,
+            0.01,
+            "These decks were built without coupled carbonate, so dissolved carbon dioxide "
+            "never moves from its\ninitial value and there is no modelled curve to draw. "
+            "Rebuild with couple_carbonate to compare.",
+            ha="center",
+            fontsize=9,
+            color=PALETTE["guide"],
+        )
+        figure.tight_layout(rect=[0, 0.09, 1, 1])
+        figure.savefig(output_path, dpi=200)
+        plt.close(figure)
+        return output_path
 
-    left.set_yscale("log")
-    left.set_xlabel("Days since start of incubation")
-    left.set_ylabel("Carbon dioxide in the headspace (moles)")
-    left.set_title("Measured: carbon dioxide reaching the detector", fontsize=12)
-    left.grid(True, alpha=0.25, linewidth=0.5)
+    families = ["Sodium chloride", "Magnesium chloride", "Artificial sea salt"]
+    figure, axes = plt.subplots(1, 3, figsize=(16, 5.5), sharey=True)
 
-    right.set_xlabel("Days since start of simulation")
-    right.set_ylabel("Bicarbonate in the liquid (moles per litre)")
-    right.set_title("Model: where the respired carbon goes", fontsize=12)
-    right.grid(True, alpha=0.25, linewidth=0.5)
+    for axis, family in zip(axes, families):
+        members = [
+            entry
+            for entry in predictable
+            if salt_family(entry["batch"]["Brine Name"]) == family
+        ]
+        experiments = {entry["batch"]["Experiment"] for entry in members}
+        controls = [
+            entry
+            for entry in predictable
+            if entry["batch"]["Brine Name"] == "C"
+            and entry["batch"]["Experiment"] in experiments
+        ]
 
-    # One shared key rather than the same legend twice, so neither panel has
-    # its data covered by a box repeating what the other already said.
-    handles, labels = left.get_legend_handles_labels()
-    seen, unique = set(), []
-    for handle, label in zip(handles, labels):
-        if label not in seen:
-            seen.add(label)
-            unique.append((handle, label))
-    figure.legend(
-        [h for h, _ in unique],
-        [text for _, text in unique],
-        fontsize=8,
-        ncol=8,
-        loc="lower center",
-        bbox_to_anchor=(0.5, 0.115),
-        framealpha=0.95,
-    )
+        for entry in controls + members:
+            batch = entry["batch"]
+            colour = colour_for_brine(batch["Brine Name"])
+            name = (
+                f"No salt ({batch['Experiment']})"
+                if batch["Brine Name"] == "C"
+                else batch["Brine Name"]
+            )
+            label = f"{name}, water activity {batch['Measured Water Activity']:.3f}"
+
+            days, moles = model_carbon_dioxide_series(entry["model"], batch)
+            if days is not None:
+                axis.plot(days, moles, color=colour, linewidth=2, alpha=0.9, zorder=2)
+
+            points = measured[
+                (measured["Experiment"] == batch["Experiment"])
+                & (measured["Batch ID"] == batch["Batch ID"])
+            ]
+            if len(points):
+                axis.scatter(
+                    points["Days since start"],
+                    points["Cumulative Moles"],
+                    color=colour,
+                    s=26,
+                    edgecolor="white",
+                    linewidth=0.5,
+                    zorder=3,
+                    label=label,
+                )
+
+        axis.set_yscale("log")
+        axis.set_ylim(1e-7, 3e-3)
+        axis.set_xlim(-3, 133)
+        axis.set_xlabel("Days since start of incubation")
+        axis.set_title(family, fontsize=12)
+        axis.grid(True, alpha=0.25, linewidth=0.5)
+        axis.legend(fontsize=7.5, loc="lower right", framealpha=0.95)
+
+    axes[0].set_ylabel("Carbon dioxide in the bottle headspace (moles)")
 
     figure.suptitle(
-        "Carbon dioxide: the two panels are not the same quantity and are not overlaid",
-        fontsize=13,
+        "Modelled and measured carbon dioxide in sealed incubation bottles",
+        fontsize=14,
         y=0.99,
     )
     figure.text(
         0.5,
         0.005,
-        "No reaction in the network produces dissolved carbon dioxide; every carbon-oxidising "
-        "step yields bicarbonate, and dissolved\ncarbon dioxide is held out of carbonate "
-        "equilibrium by the deck. It never moves from its starting value, so the model cannot "
-        "yet\npredict a headspace carbon dioxide concentration. The right panel shows the carbon "
-        "the model does produce.",
+        "Lines are the reactive-transport model; filled circles are gas-chromatograph "
+        "measurements of individual bottles.\n"
+        "No parameter anywhere in this model was fitted against carbon dioxide, so both the "
+        "level and the shape here are predictions.",
         ha="center",
         fontsize=9,
         color=PALETTE["guide"],
     )
-    figure.tight_layout(rect=[0, 0.22, 1, 0.95])
+    figure.tight_layout(rect=[0, 0.06, 1, 0.96])
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
     return output_path
@@ -576,25 +642,6 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
 # ═════════════════════════════════════════════════════════════════════
 # Figure 4 -- measured against modelled, directly
 # ═════════════════════════════════════════════════════════════════════
-
-COUPLED_CARBON_DIOXIDE_COLUMN = "CO2(aq) [M]"
-
-
-def model_carbon_dioxide_headspace(run_frame, batch_row):
-    """Model headspace carbon dioxide, or None if the deck cannot predict it.
-
-    Requires a deck built with coupled carbonate. Without it the model reports
-    dissolved carbon dioxide as an independent primary species that no reaction
-    produces, so it never leaves its initial value and there is nothing to
-    compare.
-    """
-    if COUPLED_CARBON_DIOXIDE_COLUMN not in run_frame.columns:
-        return None
-    nacl, mgcl2 = setschenow_salts_from_composition(batch_row)
-    final = run_frame.iloc[-1][COUPLED_CARBON_DIOXIDE_COLUMN]
-    return aqueous_concentration_to_headspace_moles(
-        final, GASES["CO2"], nacl_molarity=nacl, mgcl2_molarity=mgcl2
-    ).to_value(u.mol)
 
 
 def plot_measured_against_modelled(paired, ecsv_glob, output_path):
