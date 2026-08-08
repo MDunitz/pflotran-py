@@ -51,9 +51,14 @@ which this model does not track. This decomposition is the least certain step
 in the module and is the first thing to check if a sea-salt batch behaves oddly.
 """
 
+import logging
 import os
 
 import pandas as pd
+
+from .corrections import check_mass_balance, correct_sea_salt_makeup_volume
+
+logger = logging.getLogger(__name__)
 
 # ═════════════════════════════════════════════════════════════════════
 # Sheet locations
@@ -133,10 +138,29 @@ def _sheet_url(workbook_id, gid):
     )
 
 
-def fetch_brines():
-    """Read the Brines tab: one row per brine with its salt masses."""
+def fetch_brines(apply_corrections=True):
+    """Read the Brines tab: one row per brine with its salt masses.
+
+    Parameters
+    ----------
+    apply_corrections : bool
+        Apply the documented corrections in
+        :mod:`pflotran_py.comparison.corrections` before returning. On by
+        default because the uncorrected sheet contains four sea-salt recipes
+        that are physically impossible, and building decks from them would put
+        four conditions at roughly a fifth of their true salinity without
+        anything failing loudly.
+
+        Pass ``False`` to see the sheet exactly as recorded, which is what you
+        want when checking a correction or when the sheet itself has been
+        fixed at source. Each correction logs at INFO when it fires, so a run
+        never silently rewrites data.
+    """
     brines = pd.read_csv(_sheet_url(BATCH_WORKBOOK_ID, BRINES_TAB_GID))
-    return brines.dropna(subset=["Brine ID"])
+    brines = brines.dropna(subset=["Brine ID"])
+    if apply_corrections:
+        brines = correct_sea_salt_makeup_volume(brines)
+    return brines
 
 
 def fetch_batches(experiment_id):
@@ -545,7 +569,16 @@ def main():
 
     table = build_batch_table(args.experiments)
 
-    density_problems = check_recipe_consistency()
+    raw = fetch_brines(apply_corrections=False)
+    impossible = check_mass_balance(raw)
+    if impossible:
+        print("PHYSICALLY IMPOSSIBLE RECIPES IN THE SHEET AS RECORDED")
+        print("These are corrected on read; see comparison/corrections.py.")
+        for problem in impossible:
+            print(f"  [mass balance] {problem['message']}")
+        print()
+
+    density_problems = check_recipe_consistency(fetch_brines())
     activity_problems = check_against_water_activity(table)
 
     if density_problems or activity_problems:
