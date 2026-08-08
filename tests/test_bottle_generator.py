@@ -112,12 +112,14 @@ def test_temperature_matches_the_post_processing_assumption(deck):
 
 
 def test_run_spans_the_measured_incubation_window(deck):
-    """Both measured series run past 42 days; the default must cover them."""
+    """The pipeline's output runs to 119 days for Exp003 and 122 for Exp004.
+    A shorter simulation would stop partway through the measured record, and
+    the comparison would silently cover only part of the experiment."""
     final_time = next(
         line for line in deck.splitlines() if line.strip().startswith("FINAL_TIME")
     )
     days = int(final_time.split()[1])
-    assert days >= 51
+    assert days >= 122
 
 
 def test_database_path_resolves_in_this_clone(deck):

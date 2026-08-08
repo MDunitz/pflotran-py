@@ -108,8 +108,15 @@ BOTTLE_GAS_PRESSURE_PA = 1.01325e5
 # the simulation agree with it.
 BOTTLE_TEMPERATURE_C = 18.0
 
-# Long enough to span both measured series (42 d methanogen, 51 d spirulina).
-BOTTLE_FINAL_TIME_DAYS = 60
+# Long enough to span the measured incubations with margin. The pipeline's own
+# output runs to 119 days for Exp003 and 122 for Exp004, so a simulation must
+# reach at least 122 days for the comparison to cover the whole measured record
+# rather than stopping partway through it.
+#
+# An earlier value of 60 days was set from the older exported files, which end
+# at 42 and 51 days. Those exports turned out to be a stale snapshot; the live
+# pipeline output runs twice as long.
+BOTTLE_FINAL_TIME_DAYS = 130
 
 # ═════════════════════════════════════════════════════════════════════
 # Water activity <-> NaCl molality
