@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 CONTAINER_IMAGE = "pflotran-py-test"
 CONTAINER_WORKDIR = "/work"
-CONTAINER_DATABASE = f"{CONTAINER_WORKDIR}/sandbox/hanford.dat"
+CONTAINER_DATABASE_DIR = f"{CONTAINER_WORKDIR}/sandbox"
 CONTAINER_PFLOTRAN = "/opt/pflotran-py/pflotran"
 
 
@@ -37,12 +37,16 @@ def prepare_deck(source_path, destination_path):
     with open(source_path) as handle:
         text = handle.read()
 
-    text = re.sub(
-        r"^\s*DATABASE\s+.*$",
-        f"  DATABASE {CONTAINER_DATABASE}",
-        text,
-        flags=re.MULTILINE,
-    )
+    # Repoint the database into the container, keeping whichever file the deck
+    # asked for. Rewriting the whole path to a fixed filename would silently
+    # substitute a different database: the closed-batch decks use a patched copy
+    # carrying gas-phase methane, and forcing them back to the stock file makes
+    # PFLOTRAN reject the deck for a reason that looks like a chemistry error.
+    def _repoint(match):
+        requested = match.group(1).strip()
+        return f"  DATABASE {CONTAINER_DATABASE_DIR}/{os.path.basename(requested)}"
+
+    text = re.sub(r"^\s*DATABASE\s+(.*)$", _repoint, text, flags=re.MULTILINE)
     text = re.sub(
         r"\n[ \t]*OUTPUT\n[ \t]*WATER_ACTIVITY_COEFFICIENT\n[ \t]*/\n",
         "\n",

@@ -214,6 +214,32 @@ class PFLOTRANGenerator:
         final_time_days=31,
         initial_timestep_hours=2.0,
         max_timestep_hours=12.0,
+        # --- Chemistry configuration ---
+        # Whether dissolved carbon dioxide is held in equilibrium with the
+        # carbonate system, or carried as an independent primary species.
+        #
+        # Defaults to False, which is the historical behaviour of the sediment
+        # column decks and is left alone here so that existing column results
+        # stay reproducible.
+        #
+        # Setting it True moves CO2(aq) from the primary list to the secondary
+        # list, so PFLOTRAN computes it from bicarbonate and pH through the
+        # database reaction
+        #
+        #     CO2(aq) = HCO3- + H+ - H2O
+        #
+        # (hanford.dat, log K -6.3447 at 25 C). This matters because no reaction
+        # in the network produces CO2(aq): every carbon-oxidising step yields
+        # bicarbonate. Carried as a decoupled primary species, dissolved carbon
+        # dioxide therefore never moves from its initial value, however much
+        # carbon the organisms respire, and the model cannot predict a headspace
+        # carbon dioxide concentration at all.
+        #
+        # Note that the same argument does NOT apply to CH4(aq), whose database
+        # entry is a redox reaction rather than an acid-base one. Decoupling
+        # methane is what allows the kinetic network to produce it, and must
+        # stay.
+        couple_carbonate=False,
         # --- Paths ---
         database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
@@ -238,6 +264,9 @@ class PFLOTRANGenerator:
         # Inhibition mechanism toggles
         self.enable_cl_inhibition = enable_cl_inhibition
         self.enable_aw_sandbox = enable_aw_sandbox
+
+        # Chemistry configuration
+        self.couple_carbonate = couple_carbonate
 
         # Domain
         self.dimensions = dimensions.lower()
@@ -269,20 +298,56 @@ class PFLOTRANGenerator:
     # Section builders (each returns a string)
     # ─────────────────────────────────────────────────────────────────
 
+    def _primary_species(self):
+        """Species carried as independent primary unknowns in this deck."""
+        primary = list(PRIMARY_SPECIES)
+        if self.couple_carbonate and "CO2(aq)" in primary:
+            primary.remove("CO2(aq)")
+        return primary
+
+    def _include_reaction(self, rxn):
+        """Whether a reaction from the network belongs in this deck.
+
+        A seam for subclasses that model a different physical system. The base
+        generator includes every reaction.
+        """
+        return True
+
+    def _build_mineral_kinetics_and_sorption(self):
+        """Mineral kinetics, immobile species, gas species and sorption."""
+        return MINERAL_KINETICS_AND_SORPTION
+
+    def _build_chemistry_output(self):
+        """Closing CHEMISTRY block: output requests and the database path."""
+        return CHEMISTRY_OUTPUT.format(database_path=self.database_path)
+
     def _build_species_lists(self):
-        """PRIMARY_SPECIES, DECOUPLED_EQUILIBRIUM_REACTIONS, SECONDARY_SPECIES, MINERALS"""
+        """PRIMARY_SPECIES, DECOUPLED_EQUILIBRIUM_REACTIONS, SECONDARY_SPECIES, MINERALS
+
+        When ``couple_carbonate`` is set, dissolved carbon dioxide moves out of
+        the primary list and into the secondary list. See the constructor
+        documentation for why.
+        """
+        primary = self._primary_species()
+        secondary = list(SECONDARY_SPECIES)
+        if self.couple_carbonate and "CO2(aq)" not in secondary:
+            secondary.append("CO2(aq)")
+
         lines = ["\nPRIMARY_SPECIES"]
-        for s in PRIMARY_SPECIES:
+        for s in primary:
             lines.append(f"  {s}")
         lines.append("/")
 
+        # The decoupled list is the primary list. Every primary species here is
+        # a redox or acid-base species that the database would otherwise hold at
+        # equilibrium; decoupling lets the kinetic reaction network drive them.
         lines.append("DECOUPLED_EQUILIBRIUM_REACTIONS")
-        for s in PRIMARY_SPECIES:
+        for s in primary:
             lines.append(f"  {s}")
         lines.append("/")
 
         lines.append("SECONDARY_SPECIES")
-        for s in SECONDARY_SPECIES:
+        for s in secondary:
             lines.append(f"  {s}")
         lines.append("/")
 
@@ -349,6 +414,8 @@ class PFLOTRANGenerator:
         """All MICROBIAL + GENERAL reactions."""
         blocks = []
         for rxn in MICROBIAL_REACTIONS:
+            if not self._include_reaction(rxn):
+                continue
             blocks.append(self._build_microbial_reaction(rxn))
         for rxn in GENERAL_REACTIONS:
             blocks.append(self._build_general_reaction(rxn))
@@ -391,8 +458,10 @@ class PFLOTRANGenerator:
             "  CONCENTRATIONS",
         ]
 
-        # Parameterized species from self.concentrations
-        for species in PRIMARY_SPECIES:
+        # Parameterized species from self.concentrations. A species that has
+        # been moved to the secondary list is computed by PFLOTRAN rather than
+        # constrained, so it must not appear here.
+        for species in self._primary_species():
             if species in self.concentrations:
                 lines.append(f"    {species:20s}{self.concentrations[species]}")
             elif species in TRACE_SPECIES:
@@ -567,10 +636,10 @@ END_SUBSURFACE"""
         sections = [
             HEADER.format(timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             self._build_species_lists(),
-            MINERAL_KINETICS_AND_SORPTION,
+            self._build_mineral_kinetics_and_sorption(),
             self._build_all_reactions(),
             self._build_reaction_sandbox() if self.enable_aw_sandbox else "",
-            CHEMISTRY_OUTPUT.format(database_path=self.database_path),
+            self._build_chemistry_output(),
             self._build_constraints(),
             SOLVER,
             self._build_grid_and_time(),

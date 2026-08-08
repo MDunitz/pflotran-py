@@ -336,63 +336,127 @@ def aqueous_concentration_to_dissolved_moles(
     return (aqueous_concentration.to(u.mol / u.L) * bottle.liquid_volume).to(u.mol)
 
 
-def model_headspace_moles(
-    aqueous_concentration,
+def gas_phase_moles(gas_concentration, bottle=DEFAULT_BOTTLE):
+    """Headspace moles read straight from a model that carries a gas phase.
+
+    The preferred route. When the deck declares the gas as an active gas
+    species, PFLOTRAN performs the partition itself using its own equilibrium
+    constants, and reports the gas-phase concentration in moles per cubic metre
+    of gas. Multiplying by the headspace volume gives the moles a gas
+    chromatograph would sample, with no assumption of ours in between.
+
+    Parameters
+    ----------
+    gas_concentration : astropy.units.Quantity or float
+        Gas-phase concentration, mol per cubic metre of gas. A bare number is
+        read in those units.
+    """
+    if not isinstance(gas_concentration, u.Quantity):
+        gas_concentration = gas_concentration * u.mol / u.m**3
+    return (gas_concentration.to(u.mol / u.m**3) * bottle.headspace_volume).to(u.mol)
+
+
+def partition_total_moles(
+    total_moles,
     gas,
-    degassed_concentration=None,
     bottle=DEFAULT_BOTTLE,
     temperature=DEFAULT_TEMPERATURE,
     nacl_molarity=0.0,
     mgcl2_molarity=0.0,
 ):
-    """Total headspace moles predicted by the model, for one gas at one time.
+    """Split a known total quantity of gas between headspace and liquid.
 
-    Two contributions, and methane needs both.
+    For decks that do **not** carry a gas phase, where the model reports the
+    whole inventory of a gas as dissolved because it has nowhere else to put it.
 
-    The first is the gas in equilibrium with what is still dissolved, from
-    Henry's law.
-
-    The second applies to methane only. The reaction network has no methane gas
-    phase; instead it carries an ebullition proxy, ``CH4(aq) -> Tracer2``, which
-    removes dissolved methane above a threshold concentration to represent
-    bubbles forming and leaving. That methane is gone from the liquid, and in a
-    sealed vial there is nowhere for it to go but the headspace. Leaving it out
-    would lose real production; counting it twice would invent some. So it is
-    added once, as moles, and not passed through Henry's law again -- it is
-    already out of solution.
+    This function takes that total and divides it, rather than adding a
+    headspace on top of it. The distinction is not cosmetic. Multiplying a
+    dissolved concentration by the partition coefficient and the headspace
+    volume answers the question "if this liquid were equilibrated against a
+    headspace, what would the headspace hold?" -- and the answer is larger than
+    the methane the model ever made, by a factor of roughly
+    ``(K * V_gas + V_liquid) / V_liquid``, about a hundredfold for methane in
+    this vial. Doing that and calling the result a prediction inflates the
+    model by that factor.
 
     Parameters
     ----------
-    aqueous_concentration : astropy.units.Quantity or float
-        The model's dissolved concentration, mol/L.
-    degassed_concentration : astropy.units.Quantity or float, optional
-        The model's ``Tracer2`` concentration, mol/L, for methane. Omit for
-        gases with no ebullition proxy.
+    total_moles : astropy.units.Quantity or float
+        All of the gas in the bottle, however the model distributes it.
 
     Returns
     -------
     astropy.units.Quantity
-        Moles of gas in the headspace.
+        Moles in the headspace.
     """
-    from_solution = aqueous_concentration_to_headspace_moles(
-        aqueous_concentration,
+    if not isinstance(total_moles, u.Quantity):
+        total_moles = total_moles * u.mol
+    fraction = headspace_fraction(
         gas,
         bottle=bottle,
         temperature=temperature,
         nacl_molarity=nacl_molarity,
         mgcl2_molarity=mgcl2_molarity,
     )
+    return (total_moles * fraction).to(u.mol)
 
-    if degassed_concentration is None:
-        return from_solution
 
-    if not isinstance(degassed_concentration, u.Quantity):
-        degassed_concentration = degassed_concentration * u.mol / u.L
-    from_ebullition = (
-        degassed_concentration.to(u.mol / u.L) * bottle.liquid_volume
-    ).to(u.mol)
+def model_headspace_moles(
+    aqueous_concentration,
+    gas,
+    degassed_concentration=None,
+    gas_concentration=None,
+    bottle=DEFAULT_BOTTLE,
+    temperature=DEFAULT_TEMPERATURE,
+    nacl_molarity=0.0,
+    mgcl2_molarity=0.0,
+):
+    """Headspace moles predicted by the model, for one gas at one time.
 
-    return from_solution + from_ebullition
+    Takes whichever route the deck supports.
+
+    When ``gas_concentration`` is given, the deck carries a real gas phase and
+    the answer is read from it directly.
+
+    Otherwise the deck has no gas phase, and every mole of the gas is somewhere
+    in the liquid: dissolved, plus -- for methane in decks that use the
+    ebullition proxy -- whatever the proxy has moved into ``Tracer2``. Those are
+    summed into a total and then *partitioned*, so the result can never exceed
+    what the model actually produced.
+
+    Parameters
+    ----------
+    aqueous_concentration : astropy.units.Quantity or float
+        The model's dissolved concentration, mol/L.
+    degassed_concentration : astropy.units.Quantity or float, optional
+        The model's ``Tracer2`` concentration, mol/L, for ebullition-proxy
+        decks. Omit where there is no proxy.
+    gas_concentration : astropy.units.Quantity or float, optional
+        Gas-phase concentration, mol per cubic metre of gas. When present, the
+        other two arguments are ignored.
+    """
+    if gas_concentration is not None:
+        return gas_phase_moles(gas_concentration, bottle=bottle)
+
+    if not isinstance(aqueous_concentration, u.Quantity):
+        aqueous_concentration = aqueous_concentration * u.mol / u.L
+    total = (aqueous_concentration.to(u.mol / u.L) * bottle.liquid_volume).to(u.mol)
+
+    if degassed_concentration is not None:
+        if not isinstance(degassed_concentration, u.Quantity):
+            degassed_concentration = degassed_concentration * u.mol / u.L
+        total = total + (
+            degassed_concentration.to(u.mol / u.L) * bottle.liquid_volume
+        ).to(u.mol)
+
+    return partition_total_moles(
+        total,
+        gas,
+        bottle=bottle,
+        temperature=temperature,
+        nacl_molarity=nacl_molarity,
+        mgcl2_molarity=mgcl2_molarity,
+    )
 
 
 def headspace_moles_to_total_moles(

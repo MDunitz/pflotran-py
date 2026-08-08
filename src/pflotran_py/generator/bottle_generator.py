@@ -24,12 +24,19 @@ the sediment-column generator and deliberately changes nothing else:
 2.  **The domain is the size of a vial.** A single cell of 1.25e-4 cubic metres
     (a 50 mm cube) rather than one cubic metre, with a gas saturation chosen to
     reproduce the real headspace-to-liquid ratio.
-3.  **The run is long enough to compare against.** Sixty days by default, which
-    spans both measured incubation series (42 and 51 days), rather than the
-    31-day column default.
+3.  **The run is long enough to compare against.** A hundred and thirty days by
+    default, which spans the measured record (119 days for Exp003, 122 for
+    Exp004), rather than the 31-day column default.
 4.  **The temperature is the incubation temperature.** 18 degrees Celsius, which
     is what the post-processing package in ``config.py`` already assumes, rather
     than the 8 degrees Celsius used for coastal sediment.
+
+Two further changes concern the chemistry rather than the geometry, and are
+described where they are implemented: ``couple_carbonate`` lets dissolved carbon
+dioxide equilibrate with the carbonate system instead of being frozen as an
+independent primary species, and ``methane_gas_phase`` gives the bottle a real
+methane headspace in place of the ebullition proxy. Both default on here and
+off in the column generator, so existing column results are unaffected.
 
 Everything that constitutes the chemistry -- the microbial reaction network, the
 three water-activity inhibition sandboxes, the species and mineral lists, the
@@ -301,6 +308,11 @@ def nacl_brine(molality=None, water_activity=None):
 # ═════════════════════════════════════════════════════════════════════
 
 
+def _repo_root():
+    package_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.abspath(os.path.join(package_dir, "..", "..", ".."))
+
+
 def _default_database_path():
     """Absolute path to the repository's own thermodynamic database.
 
@@ -308,9 +320,90 @@ def _default_database_path():
     path that exists on one machine. Resolving against this file's location
     makes a generated deck runnable from any clone.
     """
-    package_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.abspath(os.path.join(package_dir, "..", "..", ".."))
-    return os.path.join(repo_root, "sandbox", "hanford.dat")
+    return os.path.join(_repo_root(), "sandbox", "hanford.dat")
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Methane gas phase
+# ═════════════════════════════════════════════════════════════════════
+#
+# A sealed vial has a real headspace, and methane moves into it continuously by
+# Henry's law. The inherited reaction network models that departure differently:
+# with an ebullition proxy, a kinetic reaction CH4(aq) -> Tracer2 that fires only
+# once dissolved methane passes 2.5e-3 M, standing in for bubbles nucleating and
+# rising away. That is a reasonable picture of submerged sediment, where methane
+# must become buoyant enough to escape. It is the wrong picture of a bottle,
+# where there is no threshold to cross: the headspace is already there, and
+# methane partitions into it from the first molecule produced.
+#
+# Replacing the proxy with a genuine gas phase requires a gas-phase methane
+# species, and the database does not quite provide one. hanford.dat defines
+# CH4(g) against Methane(aq), an organic species built on an ethane basis that
+# this reaction network does not carry. The deck's methane is CH4(aq), a redox
+# species built on bicarbonate and oxygen. The two are the same molecule -- both
+# are recorded with molar mass 16.0428 -- but they are written against different
+# basis species, so the tabulated gas reaction cannot be used as it stands.
+#
+# What can be reused is the equilibrium constant. The tabulated log K series for
+# CH4(g) is the methane Henry constant: at 25 degrees Celsius it gives
+# 1.41e-3 mol/(L*atm), against Sander (2023)'s 1.4e-3, and at 0 degrees the two
+# agree to two percent. Volatility is a property of the molecule, not of the
+# basis chosen to describe its dissolved form, so the same constants apply when
+# the aqueous partner is written as CH4(aq).
+#
+# The patched database therefore rewrites one line: CH4(g)'s aqueous partner,
+# leaving its constants untouched. It is written to a separate file rather than
+# edited in place, so the shared database is never modified and the change is
+# visible as a diff between two files.
+
+METHANE_GAS_SPECIES = "CH4(g)"
+_HANFORD_METHANE_GAS_LINE = "'CH4(g)' 0.0000 1 1.0000 'Methane(aq)'"
+_BOTTLE_METHANE_GAS_LINE = "'CH4(g)' 0.0000 1 1.0000 'CH4(aq)'"
+
+
+def bottle_database_path():
+    """Path to the database used by closed-batch decks."""
+    return os.path.join(_repo_root(), "sandbox", "hanford_bottle.dat")
+
+
+def write_bottle_database(source_path=None, destination_path=None):
+    """Write a database whose gas-phase methane pairs with ``CH4(aq)``.
+
+    Copies the thermodynamic database and rewrites the single ``CH4(g)`` line so
+    that its aqueous partner is the species this reaction network actually
+    carries. Equilibrium constants are copied unchanged; see the commentary
+    above for why that is sound.
+
+    Returns
+    -------
+    str
+        Path to the written database.
+
+    Raises
+    ------
+    ValueError
+        If the expected ``CH4(g)`` line is absent, rather than writing a
+        database that silently lacks a methane gas phase.
+    """
+    source_path = source_path or _default_database_path()
+    destination_path = destination_path or bottle_database_path()
+
+    with open(source_path) as handle:
+        text = handle.read()
+
+    if _HANFORD_METHANE_GAS_LINE not in text:
+        if _BOTTLE_METHANE_GAS_LINE in text:
+            return destination_path
+        raise ValueError(
+            f"No CH4(g) entry pairing with Methane(aq) found in {source_path}; "
+            "the database format may have changed. Refusing to write a bottle "
+            "database with no methane gas phase."
+        )
+
+    text = text.replace(_HANFORD_METHANE_GAS_LINE, _BOTTLE_METHANE_GAS_LINE)
+    with open(destination_path, "w") as handle:
+        handle.write(text)
+    return destination_path
 
 
 class BottleGenerator(PFLOTRANGenerator):
@@ -355,17 +448,29 @@ class BottleGenerator(PFLOTRANGenerator):
         final_time_days=BOTTLE_FINAL_TIME_DAYS,
         database_path=None,
         concentrations=None,
+        couple_carbonate=True,
+        methane_gas_phase=True,
         **kwargs,
     ):
         merged_concentrations = dict(concentrations or {})
         if brine:
             merged_concentrations.update(brine)
 
+        self.methane_gas_phase = methane_gas_phase
+
+        if database_path is None:
+            database_path = (
+                write_bottle_database()
+                if methane_gas_phase
+                else _default_database_path()
+            )
+
         super().__init__(
             concentrations=merged_concentrations,
             temperature=temperature,
             final_time_days=final_time_days,
-            database_path=database_path or _default_database_path(),
+            database_path=database_path,
+            couple_carbonate=couple_carbonate,
             **kwargs,
         )
 
@@ -386,6 +491,52 @@ class BottleGenerator(PFLOTRANGenerator):
     # ─────────────────────────────────────────────────────────────────
     # Overrides
     # ─────────────────────────────────────────────────────────────────
+
+    def _include_reaction(self, rxn):
+        """Drop the ebullition proxy when a real gas phase is present.
+
+        With ``CH4(g)`` declared, PFLOTRAN moves methane between the liquid and
+        the headspace itself, using the equilibrium constant from the database.
+        Keeping the proxy alongside it would remove the same methane twice --
+        once into the gas phase and once into ``Tracer2`` -- and would impose a
+        2.5e-3 M threshold on a process that in a sealed vial has none.
+        """
+        if self.methane_gas_phase and rxn.get("rate_key") == "ebullition":
+            return False
+        return super()._include_reaction(rxn)
+
+    def _build_mineral_kinetics_and_sorption(self):
+        """Add gas-phase methane to the active gas species.
+
+        Active rather than passive: a passive gas species is held at a fixed
+        partial pressure, which is what an open system in contact with the
+        atmosphere looks like. In a sealed bottle the methane partial pressure
+        is free to rise as methane accumulates, which is an active species.
+        """
+        block = super()._build_mineral_kinetics_and_sorption()
+        if not self.methane_gas_phase:
+            return block
+        return block.replace(
+            "    ACTIVE_GAS_SPECIES\n      GAS_TRANSPORT_IS_UNVETTED\n      CO2(g)\n",
+            "    ACTIVE_GAS_SPECIES\n      GAS_TRANSPORT_IS_UNVETTED\n      CO2(g)\n"
+            f"      {METHANE_GAS_SPECIES}\n",
+        )
+
+    def _build_chemistry_output(self):
+        """Report gas-phase methane, so the headspace can be read directly.
+
+        Without this the simulation partitions methane into the headspace but
+        never writes how much went there, and the comparison would have to infer
+        it from the dissolved concentration -- which is the very inference the
+        gas phase was added to avoid.
+        """
+        block = super()._build_chemistry_output()
+        if not self.methane_gas_phase:
+            return block
+        return block.replace(
+            "  OUTPUT\n    PH\n",
+            f"  OUTPUT\n    PH\n    GAS_CONCENTRATION\n    {METHANE_GAS_SPECIES}\n",
+        )
 
     def _build_constraints(self):
         """Initial constraint only -- a sealed bottle has no boundary.

@@ -16,6 +16,8 @@ from pflotran_py.comparison.headspace import (
     DEFAULT_BOTTLE,
     GASES,
     BottleGeometry,
+    gas_phase_moles,
+    partition_total_moles,
     aqueous_concentration_to_dissolved_moles,
     aqueous_concentration_to_headspace_moles,
     gas_water_partition_coefficient,
@@ -186,13 +188,49 @@ def test_degassed_methane_is_added_to_the_headspace():
     assert with_bubbles > dissolved_only
 
 
-def test_degassed_methane_is_not_passed_through_henry_twice():
-    """It has already left solution, so it enters as moles directly. Applying
-    the partition to it again would invent methane that never existed."""
+def test_the_prediction_never_exceeds_the_methane_the_model_made():
+    """The property that matters most here, and the one whose absence inflated
+    an earlier version of this comparison by a factor of about thirty.
+
+    Multiplying a dissolved concentration by the partition coefficient and the
+    headspace volume answers a different question than the one being asked, and
+    its answer is far larger than the total quantity of gas in the bottle.
+    Whatever route is taken, the headspace can never hold more than everything.
+    """
+    aqueous = 1e-4 * u.mol / u.L
     degassed = 1e-4 * u.mol / u.L
-    total = model_headspace_moles(0.0, GASES["CH4"], degassed_concentration=degassed)
-    expected = (degassed * DEFAULT_BOTTLE.liquid_volume).to(u.mol)
-    assert total.to_value(u.mol) == pytest.approx(expected.to_value(u.mol), rel=1e-9)
+    total_made = ((aqueous + degassed) * DEFAULT_BOTTLE.liquid_volume).to_value(u.mol)
+
+    predicted = model_headspace_moles(
+        aqueous, GASES["CH4"], degassed_concentration=degassed
+    ).to_value(u.mol)
+
+    assert predicted <= total_made
+    assert predicted == pytest.approx(
+        total_made * headspace_fraction(GASES["CH4"]), rel=1e-9
+    )
+
+
+def test_a_gas_phase_reading_is_used_directly_when_present():
+    """When the deck carries a gas phase, PFLOTRAN has already done the
+    partition and the answer is read from it, not recomputed."""
+    gas_concentration = 1.5599 * u.mol / u.m**3
+    expected = (gas_concentration * DEFAULT_BOTTLE.headspace_volume).to_value(u.mol)
+
+    assert gas_phase_moles(gas_concentration).to_value(u.mol) == pytest.approx(expected)
+    # And it overrides the aqueous route entirely.
+    assert model_headspace_moles(
+        999.0, GASES["CH4"], gas_concentration=gas_concentration
+    ).to_value(u.mol) == pytest.approx(expected)
+
+
+def test_partitioning_a_total_conserves_it():
+    total = 1e-4 * u.mol
+    in_gas = partition_total_moles(total, GASES["CH4"]).to_value(u.mol)
+    assert in_gas < total.to_value(u.mol)
+    assert in_gas == pytest.approx(
+        total.to_value(u.mol) * headspace_fraction(GASES["CH4"]), rel=1e-9
+    )
 
 
 def test_omitting_the_proxy_leaves_the_result_unchanged():

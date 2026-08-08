@@ -113,23 +113,36 @@ def load_model_run(run_dir):
     return extract_pflotran_data_hdf5(h5_path).sort_values("Time [d]")
 
 
+GAS_PHASE_METHANE_COLUMN = "Active_Gas_CH4(g) [mol_m^3 gas]"
+
+
 def model_methane_headspace(run_frame, batch_row):
     """Model methane in the headspace over time, in moles.
 
-    Combines the Henry-partitioned dissolved methane with the moles the
-    ebullition proxy has already moved out of solution.
+    Reads the gas phase directly when the deck carries one, which is the
+    honest route: PFLOTRAN has done the partition itself and we are simply
+    reporting it. Falls back to partitioning the total inventory for older
+    decks that model methane departure with the ebullition proxy instead.
     """
     nacl, mgcl2 = setschenow_salts_from_composition(batch_row)
-    moles = [
-        model_headspace_moles(
-            row["Total CH4(aq) [M]"],
-            GASES["CH4"],
-            degassed_concentration=row["Total Tracer2 [M]"],
-            nacl_molarity=nacl,
-            mgcl2_molarity=mgcl2,
-        ).to_value(u.mol)
-        for _, row in run_frame.iterrows()
-    ]
+    has_gas_phase = GAS_PHASE_METHANE_COLUMN in run_frame.columns
+
+    moles = []
+    for _, row in run_frame.iterrows():
+        moles.append(
+            model_headspace_moles(
+                row["Total CH4(aq) [M]"],
+                GASES["CH4"],
+                degassed_concentration=(
+                    None if has_gas_phase else row.get("Total Tracer2 [M]")
+                ),
+                gas_concentration=(
+                    row[GAS_PHASE_METHANE_COLUMN] if has_gas_phase else None
+                ),
+                nacl_molarity=nacl,
+                mgcl2_molarity=mgcl2,
+            ).to_value(u.mol)
+        )
     return run_frame["Time [d]"].to_numpy(), np.array(moles)
 
 
@@ -216,7 +229,7 @@ def plot_methane_timeseries(paired, output_path):
         # Clipped to the range the data occupies. The model starts from a
         # numerical floor near 1e-15, and letting the axis chase it would
         # compress every measured point into a sliver at the top.
-        axis.set_ylim(1e-9, 5e-2)
+        axis.set_ylim(1e-9, 5e-3)
         axis.set_xlim(-3, 133)
         axis.set_xlabel("Days since start of incubation")
         axis.set_title(family, fontsize=12)

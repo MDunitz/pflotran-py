@@ -12,7 +12,10 @@ Simulation of microbial redox networks (methanogenesis, sulfate reduction, iron 
 ├── sandbox/                  ← Custom Fortran 90 reaction modules (water activity inhibition)
 ├── src/pflotran_py/          ← Installable package
 │   ├── generator/            ← Python code to produce PFLOTRAN .in files
-│   └── visualization/        ← Post-processing pipeline (extract → plot → gradient/flux)
+│   │                           (including bottle_generator.py, closed-batch decks)
+│   ├── analysis/             ← Post-PFLOTRAN compute (extract, gradients, transforms)
+│   ├── comparison/           ← Model vs. measured laboratory incubations
+│   └── visualization/        ← Presentation (Bokeh / Plotly rendering)
 ├── batch/                    ← Batch file generation + inhibition diagnostics
 ├── sample_data/              ← Example PFLOTRAN Tecplot output files
 ├── reference/                ← Historical/reference input decks
@@ -405,6 +408,192 @@ Sanskriti's exploratory PFLOTRAN work, covering iterative input deck development
 - `pflotran_vars.py` -- PFLOTRAN variable definitions and parameter sets.
 - `constants.py` -- Unit conversion constants (molar masses, time conversions).
 - Notebooks: water activity curves, 100-year linear/exponential projection models.
+
+---
+
+## Comparing the model against the laboratory incubations
+
+Everything above models an open sediment column. This section is about a
+different physical system: the sealed 125 mL vials the laboratory actually
+incubates, and comparing what the model predicts for them against what the gas
+chromatograph measured.
+
+### Why the column deck cannot be used for this
+
+The column decks put a one-cubic-metre domain under an atmospheric boundary, so
+water and solutes move through it. Run against a sealed bottle that is not a
+small inaccuracy, it is the wrong system. In the five-day test output committed
+with the repository, chloride falls from 6.2 M to 7.6e-14 M within a day as the
+boundary flushes the brine out of the domain, taking with it the salt stress the
+experiment exists to study, and methane never leaves its 1e-15 numerical floor.
+
+`BottleGenerator` (in `generator/bottle_generator.py`) subclasses
+`PFLOTRANGenerator` and changes only the physical setup, inheriting the reaction
+network, the water-activity sandboxes and the species lists unchanged:
+
+| | column deck | bottle deck |
+|---|---|---|
+| Domain | 1 m³, 10–64 cells | one cell of 125 mL |
+| Boundaries | atmospheric top | **none** — sealed |
+| Gas / liquid | pore space | 100 mL headspace, 25 mL liquid |
+| Duration | 31 days | 130 days |
+| Temperature | 8 °C | 18 °C |
+
+Removing every boundary condition is what closes the bottle: PFLOTRAN treats a
+face with no boundary condition as zero-flux. With that change chloride is
+retained and methane is produced.
+
+A single-cell domain has no spatial extent, so all concentration gradients in it
+are zero and the flux stages of the post-processing pipeline produce nothing
+meaningful for these runs. That is correct for a bottle. What a bottle gives you
+is a concentration time series.
+
+### Two chemistry changes the bottle decks make
+
+Both are off by default in `PFLOTRANGenerator`, so column decks are unaffected,
+and on by default in `BottleGenerator`.
+
+**`couple_carbonate`** moves dissolved carbon dioxide from the primary species
+list to the secondary list, so PFLOTRAN computes it from bicarbonate and pH
+through the database reaction `CO2(aq) = HCO3- + H+ - H2O`. Without this the
+model cannot predict headspace carbon dioxide at all: no reaction in the network
+produces `CO2(aq)` — every carbon-oxidising step yields bicarbonate — and as a
+decoupled primary species it therefore never moves from its initial value
+however much carbon is respired. Coupling it also repairs an inconsistent
+initial state, where the deck began with dissolved carbon dioxide that
+contradicted its own bicarbonate and pH.
+
+Note that the same argument does **not** apply to `CH4(aq)`, whose database
+entry is a redox reaction rather than an acid-base one. Decoupling methane is
+what allows the kinetic network to produce it and must stay.
+
+**`methane_gas_phase`** declares `CH4(g)` as an active gas species and removes
+the ebullition proxy reaction. The proxy, `CH4(aq) -> Tracer2` gated at
+2.5e-3 M, models methane leaving as bubbles once the liquid is supersaturated
+enough for them to nucleate. That is a reasonable picture of submerged sediment
+and the wrong picture of a bottle, where the headspace already exists and
+methane partitions into it from the first molecule produced, with no threshold.
+
+This needs a small database change, because `hanford.dat` defines `CH4(g)`
+against `Methane(aq)`, an organic species on an ethane basis that this network
+does not carry, while the deck's methane is `CH4(aq)`, a redox species on a
+bicarbonate basis. The two are the same molecule — both are recorded at
+16.0428 g/mol — written against different basis species. What transfers is the
+equilibrium constant: the tabulated `CH4(g)` log K series *is* the methane
+Henry constant, giving 1.41e-3 mol/(L·atm) at 25 °C against Sander (2023)'s
+1.4e-3, and agreeing to two percent at 0 °C. Volatility belongs to the molecule,
+not to the basis chosen to describe its dissolved form.
+
+`write_bottle_database()` therefore writes `sandbox/hanford_bottle.dat`, a copy
+of the database with that one line's aqueous partner rewritten and its constants
+untouched. The shared database is never modified, and the change is visible as a
+diff between two files.
+
+As a check on the result, the partition PFLOTRAN then performs internally agrees
+with an independent Henry's-law calculation to within 16 percent at 18 °C.
+
+### The comparison package
+
+`comparison/` holds everything that touches measured data.
+
+| Module | Role |
+|---|---|
+| `brines.py` | Reads the measured salt recipes from the batch workbook and derives per-ion concentrations for each batch |
+| `corrections.py` | Documented corrections to the recorded data, each with its evidence |
+| `decks.py` | One closed-batch deck per measured batch, built from the weighed salt |
+| `run_decks.py` | Runs the decks through PFLOTRAN in the container |
+| `headspace.py` | Converts between model concentrations and headspace moles |
+| `figures.py` | The comparison figures |
+| `palette.json` | Colour roles, anchored on the colourblind-safe palette used in the measurement repository |
+
+Decks are built from the salt that was weighed out, not from a target water
+activity inverted through an idealised salt. Water activity is what the model is
+being asked to predict — PFLOTRAN computes it from composition at each timestep,
+and the inhibition sandboxes act on the value it computes. Feeding in a
+composition reverse-engineered from the measured water activity would hand the
+model part of its own answer. Building from the recipe keeps the measured water
+activity as an independent check.
+
+### Running it
+
+```bash
+# 1. Pull the measured recipes and derive per-batch ion concentrations.
+python -m pflotran_py.comparison.brines --output data/incubation_batch_composition.csv
+
+# 2. Build one closed-batch deck per measured batch.
+python -m pflotran_py.comparison.decks --output-dir decks
+
+# 3. Run them (needs the container image built; see Running PFLOTRAN above).
+python -m pflotran_py.comparison.run_decks --run-root runs --clean
+
+# 4. Build the figures.
+python -m pflotran_py.comparison.figures
+```
+
+Step 1 needs network access; the workbook is published as CSV and needs no
+credentials. Step 4 additionally needs the measurement pipeline's `.ecsv`
+output, produced in the saltyBiomass repository by
+`make run-mzml-pipeline FULL=1`; point at it with `--ecsv-glob`.
+
+Each deck runs in about a second, because the domain is a single cell.
+
+### Converting between the two sides
+
+The model reports aqueous concentrations; the chromatograph reports headspace
+moles. `headspace.py` converts the first into the second.
+
+Where a deck carries a gas phase, the gas-phase concentration is read directly
+and multiplied by the headspace volume — PFLOTRAN has already done the
+partition, and reporting it is the whole job. Where a deck does not, the model's
+entire inventory of the gas is summed and then **partitioned** between headspace
+and liquid using Henry's law with a Setschenow salting-out correction.
+
+That distinction is worth stating plainly, because getting it wrong is easy and
+quiet. Multiplying a dissolved concentration by the partition coefficient and
+the headspace volume answers the question "if this liquid were equilibrated
+against a headspace, what would the headspace hold?" For a deck whose dissolved
+concentration is not in equilibrium with any headspace — because the deck has
+none — that answer exceeds the total gas the model ever made, by roughly
+`(K·V_gas + V_liquid) / V_liquid`, about a hundredfold for methane in this vial.
+An earlier version of this comparison did exactly that and overstated the model
+by a factor of about thirty. `partition_total_moles` is mass-conserving by
+construction and the test suite asserts that the prediction can never exceed the
+gas the model produced.
+
+At 18 °C in this vial, 99 percent of methane sits in the headspace and about
+80 percent of carbon dioxide; salt raises both, because dissolved salt reduces
+gas solubility.
+
+The reverse conversion — measured headspace carbon dioxide back to total carbon
+produced — is deliberately **not** offered. It needs carbonate speciation, and
+the available equilibrium constants are calibrated for seawater to an ionic
+strength near 0.7 mol/L while these brines run from 1.2 to 5.8 mol/L. That is an
+extrapolation of up to eightfold, and the result would look like a measurement
+while being closer to a guess.
+
+### What the comparison currently shows
+
+With the closed deck, the gas phase and the corrected conversion, the model
+reproduces the unsalted bottles to within a factor of a few, and at the mildest
+salt condition it lands almost exactly on the measurements.
+
+It then fails as salt rises, and fails in a specific way. Across the full range
+of measured conditions the model's methane falls by about a factor of three,
+while the measurements fall by three to four orders of magnitude. The
+overprediction grows from roughly unity at the mildest brine to several hundred
+at the strongest.
+
+The water-activity sandboxes cannot be the explanation. Every measured batch
+sits at a water activity of 0.824 or above, against a default sandbox threshold
+of 0.5, so they never engage on this data at all. Nor is the chloride Monod term
+carrying it: two batches at essentially the same chloride concentration, one
+sea-salt and one sodium-chloride, receive noticeably different treatment,
+because what actually differs between them is sulfate. The only meaningful salt
+response the model currently has is sulfate reduction outcompeting
+methanogenesis.
+
+The clearest next experiment is therefore the sandbox threshold, which at 0.5 is
+untestable against a dataset that never goes below 0.824.
 
 ---
 
