@@ -149,6 +149,16 @@ TRACE_SPECIES = [
 #     2. Time-varying FLOW_CONDITION / TRANSPORT_CONDITION if tidal
 #     3. Possibly multiple MATERIAL_PROPERTY zones (e.g. root zone vs bulk)
 #     4. Region definitions for the lateral boundaries
+# Rate keys of the reactions that produce methane. A salinity inhibition term
+# has to be attached to these to have any effect on modelled methane; attaching
+# it anywhere else -- as the AWINHIBIT sandboxes effectively do -- leaves the
+# production pathways untouched.
+METHANOGENESIS_RATE_KEYS = (
+    "methylotrophic_methano",
+    "hydrogenotrophic_methano",
+    "acetaclastic_methano",
+)
+
 GRID_PRESETS = {
     "1d": {
         "grid_cells": "1 1 10",
@@ -240,6 +250,33 @@ class PFLOTRANGenerator:
         # methane is what allows the kinetic network to produce it, and must
         # stay.
         couple_carbonate=False,
+        # --- Salinity inhibition on the reaction network itself ---
+        # An inhibition term added directly to the network's methanogenesis
+        # reactions, as opposed to the AWINHIBIT reaction sandboxes.
+        #
+        # This exists because the sandboxes do not inhibit the network. They add
+        # their own parallel copies of the three methanogenesis pathways and
+        # inhibit only those, at a rate constant of 1e-10 against the network's
+        # 9.1e-6 for the methylotrophic route -- roughly ninety thousand times
+        # smaller, before accounting for the sandbox's sixth-order rate law.
+        # Raising the sandbox threshold until it is fully engaged in every
+        # bottle changes the modelled methane by under one percent, because the
+        # pathway it governs produces almost none of it.
+        #
+        # Pass a dict to switch this on, for example::
+        #
+        #     {"species": "Cl-", "threshold": 1.5, "interval": 1.0}
+        #
+        # ``threshold`` is in mol/L and ``interval`` is the width of the
+        # transition in decades. TYPE SMOOTHSTEP is used rather than MONOD
+        # deliberately: Monod inhibition is hyperbolic, so the most it can
+        # deliver between the weakest and strongest brine here is roughly a
+        # factor of twenty, whereas the measurements fall by four orders of
+        # magnitude across the same range. A sigmoid can express a collapse; a
+        # hyperbola cannot, at any half-saturation value.
+        #
+        # Defaults to None, leaving every existing deck unchanged.
+        salinity_inhibition=None,
         # --- Paths ---
         database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
@@ -267,6 +304,7 @@ class PFLOTRANGenerator:
 
         # Chemistry configuration
         self.couple_carbonate = couple_carbonate
+        self.salinity_inhibition = salinity_inhibition
 
         # Domain
         self.dimensions = dimensions.lower()
@@ -395,8 +433,33 @@ class PFLOTRANGenerator:
             lines.append(f'      INHIBIT_{inh["direction"]}_THRESHOLD')
             lines.append("    /")
 
+        lines.extend(self._build_salinity_inhibition(rxn))
+
         lines.append("  /")
         return "\n".join(lines)
+
+    def _build_salinity_inhibition(self, rxn):
+        """Extra inhibition lines for one reaction, or nothing.
+
+        Applied only to the methanogenesis reactions. Inhibiting fermentation
+        or the oxidation steps as well would suppress the whole carbon chain
+        rather than the methanogens specifically, which is not what the salt
+        stress in these incubations is understood to do.
+        """
+        spec = self.salinity_inhibition
+        if not spec or rxn.get("rate_key") not in METHANOGENESIS_RATE_KEYS:
+            return []
+
+        lines = [
+            "    INHIBITION",
+            f'      SPECIES_NAME        {spec["species"]}',
+            "      TYPE SMOOTHSTEP",
+            f'      SMOOTHSTEP_INTERVAL {spec.get("interval", 1.0):.2f}',
+            f'      THRESHOLD_CONCENTRATION {spec["threshold"]:.2e}',
+            "      INHIBIT_ABOVE_THRESHOLD",
+            "    /",
+        ]
+        return lines
 
     def _build_general_reaction(self, rxn):
         """Render one GENERAL_REACTION block."""

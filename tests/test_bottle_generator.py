@@ -216,3 +216,64 @@ def test_series_decks_differ_only_in_salt(tmp_path):
         ]
 
     assert strip_variable_lines(decks[0]) == strip_variable_lines(decks[1])
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Salinity inhibition on the reaction network
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_salinity_inhibition_is_off_by_default(deck):
+    """Existing decks must be unchanged unless the option is asked for."""
+    assert "TYPE SMOOTHSTEP" not in deck
+
+
+def _salted_deck(tmp_path, **spec):
+    path = tmp_path / "salted.in"
+    BottleGenerator(
+        brine=nacl_brine(molality=2.7),
+        salinity_inhibition={
+            "species": "Cl-",
+            "threshold": 1.0,
+            "interval": 0.5,
+            **spec,
+        },
+    ).generate(str(path))
+    return path.read_text()
+
+
+def test_salinity_inhibition_lands_on_the_methanogenesis_reactions(tmp_path):
+    """Three reactions produce methane, and the term has to be on all three.
+
+    The AWINHIBIT sandboxes inhibit a parallel set of methanogenesis pathways
+    running at a rate constant of 1e-10 against the network's 9.1e-6, so they
+    leave modelled methane essentially untouched. This term exists to act where
+    the methane is actually made.
+    """
+    deck = _salted_deck(tmp_path)
+    assert deck.count("TYPE SMOOTHSTEP") == 3
+
+
+def test_salinity_inhibition_is_sigmoidal_not_hyperbolic(tmp_path):
+    """Monod inhibition is hyperbolic and cannot express a collapse; across
+    the measured brines it delivers at most about twentyfold, against four
+    orders of magnitude in the data. SMOOTHSTEP can."""
+    deck = _salted_deck(tmp_path)
+    assert "TYPE SMOOTHSTEP" in deck
+    assert "SMOOTHSTEP_INTERVAL" in deck
+
+
+def test_salinity_inhibition_carries_its_parameters(tmp_path):
+    deck = _salted_deck(tmp_path, threshold=1.5, interval=1.0)
+    assert "SMOOTHSTEP_INTERVAL 1.00" in deck
+    assert "THRESHOLD_CONCENTRATION 1.50e+00" in deck
+    assert "INHIBIT_ABOVE_THRESHOLD" in deck
+
+
+def test_salinity_inhibition_does_not_touch_the_oxidation_steps(tmp_path):
+    """Salt stress in these incubations is understood to act on the
+    methanogens. Inhibiting fermentation or the oxidation steps too would
+    suppress the whole carbon chain instead."""
+    deck = _salted_deck(tmp_path)
+    methane_oxidation = deck[deck.index("methane oxidation (O2)") :][:600]
+    assert "TYPE SMOOTHSTEP" not in methane_oxidation
