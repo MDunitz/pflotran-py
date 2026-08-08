@@ -362,7 +362,7 @@ def plot_methane_against_water_activity(paired, output_path):
     )
     axis.set_ylabel("Methane in the headspace at the end of the incubation (moles)")
     axis.set_title(
-        "The model does not reproduce the measured collapse of methane production under salt",
+        "The model now collapses under salt, but too abruptly and onto a floor",
         fontsize=13,
         pad=14,
     )
@@ -448,8 +448,9 @@ def plot_methane_against_water_activity(paired, output_path):
         0.005,
         "Darker shades are more concentrated brines. Vertical axis is logarithmic; trends are "
         "drawn only within one salt, never across salts.\n"
-        "Across this range the measurements fall by roughly four orders of magnitude while the "
-        "model stays nearly flat.",
+        "The measured decline is gradual across the whole range. The modelled one is steeper "
+        "between water activity 0.96 and 0.90, then flattens onto a residual floor near "
+        "5e-8 moles.",
         ha="center",
         fontsize=9,
         color=PALETTE["guide"],
