@@ -216,8 +216,8 @@ Configure PETSc:
 Build and check:
 
 ```bash
-make PETSC_DIR=/home/mdunitz/2025/pflotran/petsc PETSC_ARCH=arch-linux-c-opt all
-make PETSC_DIR=/home/mdunitz/2025/pflotran/petsc PETSC_ARCH=arch-linux-c-opt check
+make PETSC_DIR=/home/pflotran/petsc PETSC_ARCH=arch-linux-c-opt all
+make PETSC_DIR=/home/pflotran/petsc PETSC_ARCH=arch-linux-c-opt check
 ```
 
 Set environment variables:
@@ -239,7 +239,7 @@ make pflotran
 #### Running a simulation
 
 ```bash
-export PFLOTRAN_DIR=/home/mdunitz/2025/pflotran
+export PFLOTRAN_DIR=/home/pflotran
 module load mpi/openmpi-x86_64
 mpirun -n 1 $PFLOTRAN_DIR/src/pflotran/pflotran -input_prefix filenamehere
 ```
