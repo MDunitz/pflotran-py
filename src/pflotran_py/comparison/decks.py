@@ -185,11 +185,21 @@ def main():
     parser.add_argument(
         "--aw-threshold",
         type=float,
-        default=0.95,
+        default=0.80,
         help=(
-            "Water activity at which the sandboxes centre their smoothstep. "
-            "Default 0.95 sits at the top of the measured salted range so "
-            "inhibition engages across Exp003/Exp004; it is not a methane fit."
+            "Critical water activity for the sandbox inhibition curve. With "
+            "ONE_MINUS_AW (default) this is a_crit where the rate hits zero; "
+            "with SMOOTHSTEP it centres the logistic. Default 0.80 sits just "
+            "below the driest measured bottle; it is not a methane fit."
+        ),
+    )
+    parser.add_argument(
+        "--aw-inhibition-type",
+        choices=("ONE_MINUS_AW", "SMOOTHSTEP", "THRESHOLD"),
+        default="ONE_MINUS_AW",
+        help=(
+            "Shape of the a_w rate factor. ONE_MINUS_AW is continuous in "
+            "(1-a_w); SMOOTHSTEP is a log10 logistic (interval 0.20)."
         ),
     )
     parser.add_argument(
@@ -318,6 +328,7 @@ def main():
         output_dir=args.output_dir,
         final_time_days=args.final_time_days,
         aw_threshold=args.aw_threshold,
+        aw_inhibition_type=args.aw_inhibition_type,
         **extra,
     )
 
@@ -332,7 +343,14 @@ def main():
         )
 
     lowest = result["Measured Water Activity"].min()
-    if lowest > args.aw_threshold:
+    if args.aw_inhibition_type == "ONE_MINUS_AW":
+        print()
+        print(
+            f"Sandbox ONE_MINUS_AW with a_crit={args.aw_threshold}: rate factor "
+            f"(a_w - a_crit)/(1 - a_crit) across the measured range "
+            f"(driest = {lowest:.3f})."
+        )
+    elif lowest > args.aw_threshold:
         print()
         print(
             f"Note: the driest batch sits at water activity {lowest:.3f}, above the "

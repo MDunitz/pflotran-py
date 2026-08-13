@@ -248,11 +248,13 @@ class PFLOTRANGenerator:
         # only for attribution runs that need the old dead-parallel behaviour.
         aw_sandbox_replaces_network_methanogenesis=True,
         # --- Reaction sandbox: water activity inhibition ---
-        # Threshold sits at the top of the measured salted a_w range so the
-        # smoothstep engages across Exp003/Exp004. Not fitted to methane.
-        aw_threshold=0.95,
+        # ONE_MINUS_AW maps rate to max(0,(a_w - a_crit)/(1 - a_crit)), a
+        # continuous osmoregulation-style factor across the measured a_w
+        # range. a_crit = 0.80 sits just below the driest bottle (0.824) so
+        # nothing is forced to a hard numerical floor; not a methane fit.
+        aw_threshold=0.80,
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
-        aw_inhibition_type="SMOOTHSTEP",
+        aw_inhibition_type="ONE_MINUS_AW",
         # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
         # value. Comparison decks pass the meter-read a_w by default; the
         # computed PHREEQC/pitzer.dat value is opt-in (--use-computed-aw).
@@ -646,8 +648,9 @@ class PFLOTRANGenerator:
           AWINHIBITMETHYL  — methylotrophic
 
         Rate constants and half-saturations are taken from the same defaults
-        as the network reactions. Water-activity threshold and smoothstep /
-        threshold mode come from ``aw_threshold`` / ``aw_inhibition_type``.
+        as the network reactions. Water-activity threshold and inhibition
+        mode (ONE_MINUS_AW / SMOOTHSTEP / THRESHOLD) come from
+        ``aw_threshold`` / ``aw_inhibition_type``.
         """
         general = self.thresholds["general"]
         o2_inh = self.thresholds["o2_inhibition"]

@@ -13,6 +13,7 @@ module Reaction_Sandbox_AWInhibitMethyl_class
 
   PetscInt, parameter :: AWINHIBITMETHYL_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION = 2
+  PetscInt, parameter :: AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION = 3
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitmethyl_type
@@ -161,6 +162,8 @@ subroutine AWInhibitMethylRead(this,input,option)
             this%inhibition_type = AWINHIBITMETHYL_THRESHOLD_INHIBITION
           case('SMOOTHSTEP')
             this%inhibition_type = AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION
+          case('ONE_MINUS_AW')
+            this%inhibition_type = AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION
           case default
             error_string = trim(error_string) // ',INHIBITION_TYPE'
             call InputKeywordUnrecognized(input,word,error_string ,option)
@@ -289,7 +292,16 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
     case(AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION)
       ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.05d0, aw_inhibition, tempreal)
+                                        0.20d0, aw_inhibition, tempreal)
+    case(AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION)
+      if (this%aw_threshold >= 1.d0) then
+        aw_inhibition = 1.d0
+      else if (water_activity <= this%aw_threshold) then
+        aw_inhibition = 0.d0
+      else
+        aw_inhibition = (water_activity - this%aw_threshold) / &
+                        (1.d0 - this%aw_threshold)
+      endif
     case(AWINHIBITMETHYL_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0
