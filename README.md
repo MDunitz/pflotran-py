@@ -564,7 +564,11 @@ and `--aw-inhibition-type ONE_MINUS_AW` with pathway-specific
 acetoclasts fail first under salt; literature ordering, not a methane fit),
 and pass each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
 so inhibition is not keyed on PFLOTRAN's ideal Raoult estimate (which is too
-high for Mg brines). Rebuild the container after pulling sandbox Fortran
+high for Mg brines). With `--cellulose-hydrolysis`, the acetoclastic
+`H+_below` Monod Ki is also moved from 2.88×10⁻⁷ (half at pH ~6.5) to
+3.16×10⁻⁸ (half at pH ~7.5), matching the upper edge of the usual acetoclast
+optimum — otherwise bottle controls that drift to pH ~7.9 bank acetate and
+starve methane. Rebuild the container after pulling sandbox Fortran
 changes.
 
 ### Running it
