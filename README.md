@@ -584,7 +584,11 @@ and pass each batch's **meter-read** water activity as
 recipe is an independent oracle, not the default inhibition input: it is
 near-exact for 1:1 NaCl and ~0.02 high for the Mg brines, so feeding it in
 would bias the Na-vs-Mg contrast. Pass `--use-computed-aw` only for
-sensitivity checks. Rebuild the container after pulling sandbox Fortran
+sensitivity checks. With `--cellulose-hydrolysis`, the acetoclastic
+`H+_below` Monod Ki is also moved from 2.88×10⁻⁷ (half at pH ~6.5) to
+3.16×10⁻⁸ (half at pH ~7.5), matching the upper edge of the usual acetoclast
+optimum — otherwise bottle controls that drift to pH ~7.9 bank acetate and
+starve methane. Rebuild the container after pulling sandbox Fortran
 changes.
 
 ### Running it
