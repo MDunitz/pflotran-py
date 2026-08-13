@@ -560,7 +560,10 @@ inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
 and `--aw-threshold 0.95` (top of the measured salted range; not a methane
-fit). Rebuild the container after pulling sandbox Fortran changes.
+fit), and pass each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
+so inhibition is not keyed on PFLOTRAN's ideal Raoult estimate (which is too
+high for Mg brines). Rebuild the container after pulling sandbox Fortran
+changes.
 
 ### Running it
 

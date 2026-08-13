@@ -19,14 +19,11 @@ activities in this experiment, the ionic strength needed runs Na < sea salt <
 Mg, spanning roughly a factor of 1.6. A deck built from an inverted water
 activity would put the right water activity on the wrong solution.
 
-More importantly, water activity is what the model is being asked to *predict*.
-PFLOTRAN computes it from the solution composition at each timestep, and the
-inhibition sandboxes act on the value it computes. Feeding in a composition
-reverse-engineered from the measured water activity would hand the model part
-of its own answer. Building from the weighed salt keeps the measured water
-activity as an independent check: after a run, the water activity PFLOTRAN
-computed can be compared against the one the meter read, and that agreement or
-disagreement is informative rather than circular.
+More importantly, the *composition* is what the model is being asked to carry.
+Building from the weighed salt keeps the measured water activity as an
+independent check against the Pitzer a_w the sandboxes use for inhibition
+(see ``FIXED_WATER_ACTIVITY``), and against PFLOTRAN's own ideal-Raoult
+estimate if that is left to run.
 """
 
 import logging
@@ -34,6 +31,7 @@ import os
 
 import pandas as pd
 
+from ..geochem.water_activity import pitzer_water_activity_from_batch
 from ..generator.bottle_generator import BOTTLE_FINAL_TIME_DAYS, BottleGenerator
 from .brines import to_pflotran_constraints
 
@@ -74,18 +72,43 @@ def generate_deck_for_batch(
     constraints = to_pflotran_constraints(batch_row)
 
     water_activity = batch_row.get("Measured Water Activity")
-    label = (
-        f"{batch_row['Experiment']} batch {int(batch_row['Batch ID'])}, brine "
-        f"{batch_row['Brine Name']}, measured water activity "
-        f"{water_activity:.4f}, ionic strength "
-        f"{batch_row['Ionic Strength']:.2f} mol/L"
-    )
+    kwargs = dict(generator_kwargs)
+    source = kwargs.pop("water_activity_source", "pitzer")
+    if "fixed_water_activity" not in kwargs:
+        if source == "pitzer":
+            kwargs["fixed_water_activity"] = pitzer_water_activity_from_batch(
+                batch_row
+            )
+        elif source == "measured":
+            kwargs["fixed_water_activity"] = float(water_activity)
+        elif source == "pflotran":
+            kwargs["fixed_water_activity"] = None
+        else:
+            raise ValueError(
+                f"Unknown water_activity_source {source!r}; "
+                "expected 'pitzer', 'measured', or 'pflotran'"
+            )
+    pitzer_aw = kwargs.get("fixed_water_activity")
+    if pitzer_aw is not None:
+        label = (
+            f"{batch_row['Experiment']} batch {int(batch_row['Batch ID'])}, brine "
+            f"{batch_row['Brine Name']}, measured water activity "
+            f"{water_activity:.4f}, sandbox a_w {float(pitzer_aw):.4f}, "
+            f"ionic strength {batch_row['Ionic Strength']:.2f} mol/L"
+        )
+    else:
+        label = (
+            f"{batch_row['Experiment']} batch {int(batch_row['Batch ID'])}, brine "
+            f"{batch_row['Brine Name']}, measured water activity "
+            f"{water_activity:.4f}, ionic strength "
+            f"{batch_row['Ionic Strength']:.2f} mol/L"
+        )
 
     generator = BottleGenerator(
         brine=constraints,
         label=label,
         final_time_days=final_time_days,
-        **generator_kwargs,
+        **kwargs,
     )
 
     os.makedirs(output_dir, exist_ok=True)
@@ -217,6 +240,22 @@ def main():
             "attribution only; a deck built this way is not a prediction."
         ),
     )
+    parser.add_argument(
+        "--use-measured-aw",
+        action="store_true",
+        help=(
+            "Pass each batch's meter-read water activity to the sandboxes "
+            "instead of the Pitzer value from the weighed recipe."
+        ),
+    )
+    parser.add_argument(
+        "--no-fixed-aw",
+        action="store_true",
+        help=(
+            "Do not pass FIXED_WATER_ACTIVITY; sandboxes use PFLOTRAN's "
+            "ideal Raoult a_w. Attribution only."
+        ),
+    )
     args = parser.parse_args()
 
     extra = {}
@@ -236,6 +275,10 @@ def main():
         extra["aw_sandbox_replaces_network_methanogenesis"] = False
     if args.disable_reactions:
         extra["disabled_rate_keys"] = set(args.disable_reactions)
+    if args.no_fixed_aw:
+        extra["water_activity_source"] = "pflotran"
+    elif args.use_measured_aw:
+        extra["water_activity_source"] = "measured"
 
     if os.path.exists(args.composition):
         table = pd.read_csv(args.composition)

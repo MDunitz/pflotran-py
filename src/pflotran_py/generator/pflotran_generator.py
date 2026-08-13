@@ -253,6 +253,9 @@ class PFLOTRANGenerator:
         aw_threshold=0.95,
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
         aw_inhibition_type="SMOOTHSTEP",
+        # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
+        # value. Comparison decks pass the Pitzer a_w of the batch brine.
+        fixed_water_activity=None,
         # --- Domain geometry ---
         dimensions="1d",
         # --- Simulation control ---
@@ -385,6 +388,7 @@ class PFLOTRANGenerator:
         self.aw_threshold = aw_threshold
         self.aw_rate_constant = aw_rate_constant
         self.aw_inhibition_type = aw_inhibition_type
+        self.fixed_water_activity = fixed_water_activity
 
         # Inhibition mechanism toggles
         self.enable_cl_inhibition = enable_cl_inhibition
@@ -693,6 +697,10 @@ class PFLOTRANGenerator:
             rate = self.rate_constants[spec["rate_key"]]
             lines.append(f"  {spec['name']}")
             lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.4f}")
+            if self.fixed_water_activity is not None:
+                lines.append(
+                    f"    FIXED_WATER_ACTIVITY {float(self.fixed_water_activity):.6f}"
+                )
             lines.append(f"    RATE_CONSTANT {rate:.2e}")
             lines.extend(spec["extra"])
             lines.append(f"    INHIBITION_TYPE {self.aw_inhibition_type}")

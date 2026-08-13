@@ -19,6 +19,7 @@ module Reaction_Sandbox_AWInhibitMethyl_class
 
     PetscReal :: aw_threshold
     PetscInt :: inhibition_type
+    PetscReal :: fixed_water_activity
 
     ! Network-matching Monod kinetics for methylotrophic methanogenesis:
     !   CH3OH + H2(aq) -> CH4(aq) + H2O
@@ -59,6 +60,7 @@ function AWInhibitMethylCreate()
 
   AWInhibitMethylCreate%aw_threshold = 0.95d0
   AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION
+  AWInhibitMethylCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
   AWInhibitMethylCreate%rate_constant = UNINITIALIZED_DOUBLE
   AWInhibitMethylCreate%half_saturation_ch3oh = 1.0d-1
@@ -112,6 +114,15 @@ subroutine AWInhibitMethylRead(this,input,option)
         call InputErrorMsg(input,option,'water_activity_threshold',error_string)
         if (this%aw_threshold < 0.d0 .or. this%aw_threshold > 1.d0) then
           option%io_buffer = 'WATER_ACTIVITY_THRESHOLD must be between 0 and 1'
+          call PrintErrMsg(option)
+        endif
+
+      case('FIXED_WATER_ACTIVITY')
+        call InputReadDouble(input,option,this%fixed_water_activity)
+        call InputErrorMsg(input,option,'fixed_water_activity',error_string)
+        if (this%fixed_water_activity < 0.d0 .or. &
+            this%fixed_water_activity > 1.d0) then
+          option%io_buffer = 'FIXED_WATER_ACTIVITY must be between 0 and 1'
           call PrintErrMsg(option)
         endif
 
@@ -248,7 +259,11 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
             material_auxvar%volume*1.d3
   molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
-  water_activity = exp(rt_auxvar%ln_act_h2o)
+  if (Initialized(this%fixed_water_activity)) then
+    water_activity = this%fixed_water_activity
+  else
+    water_activity = exp(rt_auxvar%ln_act_h2o)
+  endif
 
   rate_constant = this%rate_constant
   if (Initialized(this%activation_energy)) then
