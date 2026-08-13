@@ -42,3 +42,26 @@ def test_comparison_default_emits_one_minus_aw():
     block = gen._build_reaction_sandbox()
     assert "INHIBITION_TYPE ONE_MINUS_AW" in block
     assert "WATER_ACTIVITY_THRESHOLD 0.8000" in block
+
+
+def test_pathway_specific_aw_thresholds_are_ordered():
+    """Acetoclastic is most salt-sensitive, then methyl, then hydrogenotrophic."""
+    gen = BottleGenerator(
+        aw_threshold=0.80,
+        aw_threshold_methyl=0.85,
+        aw_threshold_acetate=0.90,
+        aw_inhibition_type="ONE_MINUS_AW",
+    )
+    block = gen._build_reaction_sandbox()
+    # Extract the threshold that follows each sandbox header.
+    import re
+
+    found = re.findall(
+        r"(AWINHIBIT(?:ACETATE|METHYL)?)\n\s+WATER_ACTIVITY_THRESHOLD ([0-9.]+)",
+        block,
+    )
+    by_name = {name: float(val) for name, val in found}
+    assert by_name["AWINHIBIT"] == 0.80
+    assert by_name["AWINHIBITMETHYL"] == 0.85
+    assert by_name["AWINHIBITACETATE"] == 0.90
+    assert by_name["AWINHIBITACETATE"] > by_name["AWINHIBITMETHYL"] > by_name["AWINHIBIT"]
