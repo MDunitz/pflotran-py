@@ -24,19 +24,17 @@ from ..analysis.columns import (
     flux_col,
     time_axis_column,
 )
+from .style import (
+    COMPONENT_COLORS,
+    DEFAULT_COMPONENT_COLORS,
+    SPECIES_LINE_COLORS,
+    SURFACE_MARKER_SIZE,
+    colormap_high,
+    has_resolvable_magnitude,
+    has_resolvable_span,
+)
 
 logger = logging.getLogger(__name__)
-
-# Signal floor: below this a gradient/flux magnitude is treated as no signal.
-SIGNAL_FLOOR = 1e-25
-
-SURFACE_MARKER_SIZE = 15
-SPECIES_LINE_COLORS = {"CO2": "blue", "CH4": "green", "SO4": "orange", "O2": "red"}
-COMPONENT_COLORS = {
-    "CO2": {"x": "red", "y": "orange", "z": "purple"},
-    "CH4": {"x": "darkgreen", "y": "lightgreen", "z": "olive"},
-}
-_DEFAULT_COMPONENT_COLORS = {"x": "gray", "y": "silver", "z": "black"}
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -157,7 +155,7 @@ def _surface_panel(surface_data, species, conc_col, use_flux, time_idx):
         tools="pan,wheel_zoom,box_zoom,reset,save",
     )
 
-    if vmax > vmin and vmax > SIGNAL_FLOOR:
+    if has_resolvable_span(vmin, vmax) and has_resolvable_magnitude(vmax):
         source = ColumnDataSource(surface_data)
         circles = p.scatter(
             "X [m]",
@@ -202,7 +200,7 @@ def render_surface_maps(
         magnitudes = [
             surface_data[_magnitude_col(s, use_flux)].max() for s in species_list
         ]
-        if all(m <= SIGNAL_FLOOR for m in magnitudes):
+        if not any(has_resolvable_magnitude(m) for m in magnitudes):
             logger.debug("Skipping time step %s — no signal above floor", time_idx)
             continue
 
@@ -285,7 +283,7 @@ def _timeseries_components_panel(
     )
 
     for species in species_list:
-        sc = COMPONENT_COLORS.get(species, _DEFAULT_COMPONENT_COLORS)
+        sc = COMPONENT_COLORS.get(species, DEFAULT_COMPONENT_COLORS)
         dash = "dashed" if species == "CH4" else "solid"
         for comp in ["x", "y", "z"]:
             p.line(
@@ -407,7 +405,7 @@ def render_z_slice(
     t_label = layer[time_col].iloc[0] if time_col in layer.columns else time_idx
     vmin = float(layer[conc_col].min())
     vmax = float(layer[conc_col].max())
-    v_high = vmax if vmax > vmin else vmin + SIGNAL_FLOOR
+    v_high = colormap_high(vmin, vmax)
     mapper = LinearColorMapper(palette=Viridis256, low=vmin, high=v_high)
 
     p = figure(

@@ -4,6 +4,8 @@ Single source of truth linking computed columns to their display units, so
 gradient/flux column names and Bokeh/Plotly tooltips cannot drift apart.
 """
 
+from astropy import units as u
+
 # ═════════════════════════════════════════════════════════════════════
 # Unit strings — displayed in tooltips and axis labels
 # ═════════════════════════════════════════════════════════════════════
@@ -19,18 +21,26 @@ FLUX_UNITS = "mol/(m²·s)"  # molar flux
 # Values are always converted to days so annual / multi-year runs label axes
 # correctly instead of using snapshot ordinals (0, 1, 2, ...).
 TIME_COL = "Time [d]"
+
+# Convert with astropy (same pattern as M_PER_M_TO_SI in analysis/constants.py)
+# except for year: PFLOTRAN's UnitsConvertToSI defines y/yr/year as 365 days,
+# not the Julian year (365.25 d) that astropy's u.yr uses. See units.F90:
+#   case('y','yr','year'); conversion_factor = 365.d0*24.d0*3600.d0
+_DAY = 1.0 * u.d
+_PFLOTRAN_DAYS_PER_YEAR = 365.0
+
 TIME_UNIT_TO_DAYS = {
-    "s": 1.0 / 86400.0,
-    "sec": 1.0 / 86400.0,
-    "m": 1.0 / 1440.0,
-    "min": 1.0 / 1440.0,
-    "h": 1.0 / 24.0,
-    "hr": 1.0 / 24.0,
+    "s": (1.0 * u.s).to_value(_DAY),
+    "sec": (1.0 * u.s).to_value(_DAY),
+    "m": (1.0 * u.min).to_value(_DAY),
+    "min": (1.0 * u.min).to_value(_DAY),
+    "h": (1.0 * u.h).to_value(_DAY),
+    "hr": (1.0 * u.h).to_value(_DAY),
     "d": 1.0,
     "day": 1.0,
-    "y": 365.25,
-    "yr": 365.25,
-    "year": 365.25,
+    "y": _PFLOTRAN_DAYS_PER_YEAR,
+    "yr": _PFLOTRAN_DAYS_PER_YEAR,
+    "year": _PFLOTRAN_DAYS_PER_YEAR,
 }
 
 

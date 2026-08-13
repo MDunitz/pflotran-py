@@ -95,12 +95,64 @@ def test_extract_hdf5_stores_time_in_days(sample_h5):
     assert set(df["Time [d]"].unique()) == {0.0, 1.0}
 
 
+def test_extract_hdf5_axis_order_non_cubic(tmp_path):
+    """Non-cubic index encoding catches (nx,ny,nz) transpose that cubic grids miss.
+
+    value = 100*i + 10*j + k must land on cell center (xc[i], yc[j], zc[k]).
+    """
+    path = tmp_path / "non_cubic.h5"
+    nx, ny, nz = 2, 3, 4
+    encoded = np.empty((nx, ny, nz), dtype=float)
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                encoded[i, j, k] = 100 * i + 10 * j + k
+
+    with h5py.File(path, "w") as h5:
+        coords = h5.create_group("Coordinates")
+        # Distinct axis lengths so a transpose cannot hide behind equal shapes.
+        coords.create_dataset("X [m]", data=np.linspace(0.0, float(nx), nx + 1))
+        coords.create_dataset("Y [m]", data=np.linspace(10.0, 10.0 + ny, ny + 1))
+        coords.create_dataset("Z [m]", data=np.linspace(20.0, 20.0 + nz, nz + 1))
+        group = h5.create_group("Time:  0.00000E+00 d")
+        group.create_dataset("Free_CO2(aq) [M]", data=encoded)
+
+    df = hdf5_extract.extract_pflotran_data_hdf5(str(path))
+    assert len(df) == nx * ny * nz
+
+    xc = 0.5 * (
+        np.linspace(0.0, float(nx), nx + 1)[:-1]
+        + np.linspace(0.0, float(nx), nx + 1)[1:]
+    )
+    yc = 0.5 * (
+        np.linspace(10.0, 10.0 + ny, ny + 1)[:-1]
+        + np.linspace(10.0, 10.0 + ny, ny + 1)[1:]
+    )
+    zc = 0.5 * (
+        np.linspace(20.0, 20.0 + nz, nz + 1)[:-1]
+        + np.linspace(20.0, 20.0 + nz, nz + 1)[1:]
+    )
+
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                row = df[
+                    np.isclose(df["X [m]"], xc[i])
+                    & np.isclose(df["Y [m]"], yc[j])
+                    & np.isclose(df["Z [m]"], zc[k])
+                ]
+                assert len(row) == 1
+                assert row["Free CO2(aq) [M]"].iloc[0] == pytest.approx(
+                    100 * i + 10 * j + k
+                )
+
+
 def test_parse_h5_time_days_converts_years():
     assert hdf5_extract.parse_h5_time_days("Time:  1.00000E+00 y") == pytest.approx(
-        365.25
+        365.0
     )
     assert hdf5_extract.parse_h5_time_days("Time:  2.00000E+00 yr") == pytest.approx(
-        730.5
+        730.0
     )
 
 
