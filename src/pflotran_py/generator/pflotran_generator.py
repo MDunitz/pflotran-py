@@ -236,17 +236,23 @@ class PFLOTRANGenerator:
         half_saturation=None,
         thresholds=None,
         # --- Inhibition mechanism toggles ---
-        # Both ON by default (current behavior). For the double-counting
-        # diagnostic (PR #50 item 4), run three variants:
-        #   A: enable_cl_inhibition=True,  enable_aw_sandbox=False
-        #   B: enable_cl_inhibition=False, enable_aw_sandbox=True
-        #   C: enable_cl_inhibition=True,  enable_aw_sandbox=True   (default)
+        # Both ON by default for column decks. Bottle comparison uses the
+        # sandboxes as the methanogenesis mechanism (see
+        # aw_sandbox_replaces_network_methanogenesis) and typically turns
+        # enable_cl_inhibition off so salt is not double-counted via Cl-.
         enable_cl_inhibition=True,
         enable_aw_sandbox=True,
+        # When True (default), the three AWINHIBIT sandboxes carry the network
+        # Monod rate laws and the network's own methanogenesis reactions are
+        # omitted -- otherwise the two would double-produce methane. Set False
+        # only for attribution runs that need the old dead-parallel behaviour.
+        aw_sandbox_replaces_network_methanogenesis=True,
         # --- Reaction sandbox: water activity inhibition ---
-        aw_threshold=0.5,
-        aw_rate_constant=1.0e-10,
-        aw_inhibition_type="THRESHOLD",
+        # Threshold sits at the top of the measured salted a_w range so the
+        # smoothstep engages across Exp003/Exp004. Not fitted to methane.
+        aw_threshold=0.95,
+        aw_rate_constant=None,  # unused when per-pathway rates are emitted
+        aw_inhibition_type="SMOOTHSTEP",
         # --- Domain geometry ---
         dimensions="1d",
         # --- Simulation control ---
@@ -383,6 +389,9 @@ class PFLOTRANGenerator:
         # Inhibition mechanism toggles
         self.enable_cl_inhibition = enable_cl_inhibition
         self.enable_aw_sandbox = enable_aw_sandbox
+        self.aw_sandbox_replaces_network_methanogenesis = (
+            aw_sandbox_replaces_network_methanogenesis
+        )
         self.disabled_rate_keys = frozenset(disabled_rate_keys or ())
         unknown = self.disabled_rate_keys - set(self.rate_constants)
         if unknown:
@@ -446,10 +455,20 @@ class PFLOTRANGenerator:
     def _include_reaction(self, rxn):
         """Whether a reaction from the network belongs in this deck.
 
-        A seam for subclasses that model a different physical system. The base
-        generator includes everything except what ``disabled_rate_keys`` names.
+        Omits anything in ``disabled_rate_keys``. When the AWINHIBIT sandboxes
+        own methanogenesis, also omits the network's three methane-producing
+        reactions so the two do not double-count.
         """
-        return rxn.get("rate_key") not in self.disabled_rate_keys
+        key = rxn.get("rate_key")
+        if key in self.disabled_rate_keys:
+            return False
+        if (
+            self.enable_aw_sandbox
+            and self.aw_sandbox_replaces_network_methanogenesis
+            and key in METHANOGENESIS_RATE_KEYS
+        ):
+            return False
+        return True
 
     def _build_constraint_cellulose(self):
         """Initial solid carbon inventory line for the constraint block."""
@@ -611,24 +630,71 @@ class PFLOTRANGenerator:
         return "\n\n".join(blocks)
 
     def _build_reaction_sandbox(self):
-        """REACTION_SANDBOX block for water activity inhibition.
+        """REACTION_SANDBOX block: a_w-inhibited methanogenesis.
 
-        Three sandboxes targeting different methanogenesis pathways:
-          AWINHIBIT        — hydrogenotrophic (4 H2 + HCO3- + H+ -> CH4 + 3 H2O)
-          AWINHIBITACETATE — acetoclastic (Acetate- + H2O -> CH4 + HCO3-)
-          AWINHIBITMETHYL  — methylotrophic (CH3OH + H2 -> CH4 + H2O)
+        Three sandboxes, each carrying the corresponding network Monod rate
+        law so they can replace ``MICROBIAL_REACTION`` methanogenesis rather
+        than run as a dead parallel pathway:
 
-        Parameters read by Fortran sandbox code:
-          WATER_ACTIVITY_THRESHOLD — a_w below which reaction is fully inhibited
-          RATE_CONSTANT — base rate [mol/(m³·s)] for the sandbox reaction
-          INHIBITION_TYPE — THRESHOLD (binary) or SMOOTHSTEP (gradual)
+          AWINHIBIT        — hydrogenotrophic
+          AWINHIBITACETATE — acetoclastic
+          AWINHIBITMETHYL  — methylotrophic
+
+        Rate constants and half-saturations are taken from the same defaults
+        as the network reactions. Water-activity threshold and smoothstep /
+        threshold mode come from ``aw_threshold`` / ``aw_inhibition_type``.
         """
-        sandbox_names = ["AWINHIBIT", "AWINHIBITACETATE", "AWINHIBITMETHYL"]
+        general = self.thresholds["general"]
+        o2_inh = self.thresholds["o2_inhibition"]
+        fe_inh = self.thresholds["fe_inhibition"]
+        specs = (
+            {
+                "name": "AWINHIBIT",
+                "rate_key": "hydrogenotrophic_methano",
+                "extra": [
+                    f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
+                    f"    HALF_SATURATION_HCO3 {self._get_ks('hco3'):.2e}",
+                    f"    THRESHOLD_H2 {general:.2e}",
+                    f"    THRESHOLD_HCO3 {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                    f"    FE_INHIBITION {fe_inh:.2e}",
+                    f"    H_INHIBITION {self.thresholds['h_plus_inhibition_1']:.2e}",
+                ],
+            },
+            {
+                "name": "AWINHIBITACETATE",
+                "rate_key": "acetaclastic_methano",
+                "extra": [
+                    f"    HALF_SATURATION_ACETATE {self._get_ks('acetate'):.2e}",
+                    f"    THRESHOLD_ACETATE {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                    f"    FE_INHIBITION {fe_inh:.2e}",
+                    f"    H_INHIBITION_ABOVE "
+                    f"{self.thresholds['h_plus_inhibition_2']:.2e}",
+                    f"    H_INHIBITION_BELOW "
+                    f"{self.thresholds['h_plus_inhibition_3']:.2e}",
+                ],
+            },
+            {
+                "name": "AWINHIBITMETHYL",
+                "rate_key": "methylotrophic_methano",
+                "extra": [
+                    f"    HALF_SATURATION_CH3OH {self._get_ks('ch3oh'):.2e}",
+                    f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
+                    f"    THRESHOLD_CH3OH {general:.2e}",
+                    f"    THRESHOLD_H2 {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                ],
+            },
+        )
+
         lines = ["\nREACTION_SANDBOX"]
-        for name in sandbox_names:
-            lines.append(f"  {name}")
-            lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.1e}")
-            lines.append(f"    RATE_CONSTANT {self.aw_rate_constant:.1e}")
+        for spec in specs:
+            rate = self.rate_constants[spec["rate_key"]]
+            lines.append(f"  {spec['name']}")
+            lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.4f}")
+            lines.append(f"    RATE_CONSTANT {rate:.2e}")
+            lines.extend(spec["extra"])
             lines.append(f"    INHIBITION_TYPE {self.aw_inhibition_type}")
             lines.append("  /")
         lines.append("/")

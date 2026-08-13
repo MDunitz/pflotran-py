@@ -10,21 +10,15 @@ export PYTHONPATH=src
 
 echo "==> Checking Docker"
 docker info >/dev/null
-if ! docker image inspect pflotran-py-test >/dev/null 2>&1; then
-  echo "==> Building pflotran-py-test image (first time can take a while)"
-  docker build -t pflotran-py-test -f Containerfile .
-fi
+# Always rebuild: AWINHIBIT Fortran carries network Monod keywords that an
+# older image will not recognise.
+echo "==> Building pflotran-py-test image with patched AWINHIBIT sandboxes"
+docker build -t pflotran-py-test -f Containerfile .
 
-# Monod-only salt story: the fitted Cl- smoothstep (threshold 0.75) is not
-# applied. The inhibition diagnostic showed it was responsible for the ~850x
-# cliff onto a methane floor; the network's own 0.2 M Cl- Monod remains.
-if [[ ! -d decks ]] || [[ -z "$(ls decks/*.in 2>/dev/null || true)" ]]; then
-  echo "==> Generating decks (cellulose hydrolysis; no fitted Cl- smoothstep)"
-  python -m pflotran_py.comparison.decks --output-dir decks \
-    --cellulose-hydrolysis
-else
-  echo "==> Decks already present ($(ls decks/*.in | wc -l | tr -d ' ') files)"
-fi
+echo "==> Generating decks (cellulose; a_w sandboxes; no Cl- Monod)"
+rm -rf decks
+python -m pflotran_py.comparison.decks --output-dir decks \
+  --cellulose-hydrolysis --no-cl-inhibition --aw-threshold 0.95
 
 echo "==> Running 15 closed-batch decks in Docker"
 python -m pflotran_py.comparison.run_decks --run-root runs --clean

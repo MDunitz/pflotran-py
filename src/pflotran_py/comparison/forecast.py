@@ -144,6 +144,7 @@ def run_grid(batches, work_root, repo_root, tag_prefix):
                         batch,
                         output_dir=deck_dir,
                         cellulose_hydrolysis={},
+                        aw_sandbox_replaces_network_methanogenesis=False,
                         salinity_inhibition={
                             "species": "Cl-",
                             "threshold": threshold,

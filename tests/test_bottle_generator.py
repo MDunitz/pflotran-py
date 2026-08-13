@@ -75,11 +75,25 @@ def test_deck_has_exactly_one_coupler(deck):
 
 def test_deck_keeps_the_reaction_network(deck):
     """Closure must not have cost us the chemistry inherited from the column
-    generator."""
+    generator. Methanogenesis lives in the AWINHIBIT sandboxes."""
     for expected in ("AWINHIBIT", "AWINHIBITACETATE", "AWINHIBITMETHYL"):
         assert expected in deck
     assert "MICROBIAL_REACTION" in deck
     assert "ACTIVITY_WATER" in deck
+    assert "HALF_SATURATION_H2" in deck
+    assert "INHIBITION_TYPE SMOOTHSTEP" in deck
+    # Network methanogenesis is omitted -- the sandboxes own those pathways.
+    assert "# hydrogenotrophic methanogenesis" not in deck
+    assert "# acetoclastic methanogenesis" not in deck
+    assert "# methylotrophic methanogenesis" not in deck
+
+
+def test_sandbox_rates_match_the_network_defaults(deck):
+    """Sandbox RATE_CONSTANT values are the network methanogenesis rates."""
+    assert "RATE_CONSTANT 7.20e-09" in deck  # hydrogenotrophic
+    assert "RATE_CONSTANT 1.50e-08" in deck  # acetoclastic
+    assert "RATE_CONSTANT 9.10e-06" in deck  # methylotrophic
+    assert "WATER_ACTIVITY_THRESHOLD 0.9500" in deck
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -224,14 +238,22 @@ def test_series_decks_differ_only_in_salt(tmp_path):
 
 
 def test_salinity_inhibition_is_off_by_default(deck):
-    """Existing decks must be unchanged unless the option is asked for."""
-    assert "TYPE SMOOTHSTEP" not in deck
+    """Cl- smoothstep on the network is off unless asked for.
+
+    The a_w sandboxes still use INHIBITION_TYPE SMOOTHSTEP; that is a different
+    term. The Cl- one is the one that writes SMOOTHSTEP_INTERVAL.
+    """
+    assert "SMOOTHSTEP_INTERVAL" not in deck
+    assert "INHIBITION_TYPE SMOOTHSTEP" in deck
 
 
 def _salted_deck(tmp_path, **spec):
     path = tmp_path / "salted.in"
     BottleGenerator(
         brine=nacl_brine(molality=2.7),
+        # Extra Cl- smoothstep on the network methanogenesis reactions -- keep
+        # those reactions rather than replacing them with the a_w sandboxes.
+        aw_sandbox_replaces_network_methanogenesis=False,
         salinity_inhibition={
             "species": "Cl-",
             "threshold": 1.0,
@@ -243,15 +265,11 @@ def _salted_deck(tmp_path, **spec):
 
 
 def test_salinity_inhibition_lands_on_the_methanogenesis_reactions(tmp_path):
-    """Three reactions produce methane, and the term has to be on all three.
-
-    The AWINHIBIT sandboxes inhibit a parallel set of methanogenesis pathways
-    running at a rate constant of 1e-10 against the network's 9.1e-6, so they
-    leave modelled methane essentially untouched. This term exists to act where
-    the methane is actually made.
-    """
+    """Three reactions produce methane, and the term has to be on all three."""
     deck = _salted_deck(tmp_path)
-    assert deck.count("TYPE SMOOTHSTEP") == 3
+    # Sandbox SMOOTHSTEP (a_w) plus three Cl- smoothsteps on methanogenesis.
+    assert deck.count("TYPE SMOOTHSTEP") >= 3
+    assert deck.count("SMOOTHSTEP_INTERVAL 0.50") == 3
 
 
 def test_salinity_inhibition_is_sigmoidal_not_hyperbolic(tmp_path):

@@ -16,22 +16,29 @@ module Reaction_Sandbox_AWInhibitAcetate_class
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitacetate_type
-    
-    ! Water activity inhibition parameters
+
     PetscReal :: aw_threshold
     PetscInt :: inhibition_type
 
-    ! Reaction parameters for acetoclastic methanogenesis: Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
+    ! Network-matching Monod kinetics for acetoclastic methanogenesis:
+    !   Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
     PetscReal :: rate_constant
+    PetscReal :: half_saturation_acetate
+    PetscReal :: threshold_acetate
+    PetscReal :: o2_inhibition
+    PetscReal :: fe_inhibition
+    PetscReal :: h_inhibition_above
+    PetscReal :: h_inhibition_below
     PetscReal :: activation_energy
     PetscReal :: reference_temperature
 
-    ! Species indices
     PetscInt :: i_acetate
-    PetscInt :: i_h2o
     PetscInt :: i_ch4
     PetscInt :: i_hco3
     PetscInt :: i_tracer
+    PetscInt :: i_o2
+    PetscInt :: i_fe
+    PetscInt :: i_h
 
   contains
     procedure, public :: ReadInput  => AWInhibitAcetateRead
@@ -47,31 +54,33 @@ contains
 ! ************************************************************************** !
 
 function AWInhibitAcetateCreate()
-  !
-  ! Allocates AWInhibitAcetate reaction object for water activity inhibited acetoclastic methanogenesis
-  !
 
   implicit none
 
   class(reaction_sandbox_awinhibitacetate_type), pointer :: AWInhibitAcetateCreate
 
   allocate(AWInhibitAcetateCreate)
-  
-  ! Default water activity threshold of 0.5
-  AWInhibitAcetateCreate%aw_threshold = 0.5d0
-  AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_THRESHOLD_INHIBITION
-  
-  ! Reaction parameters
+
+  AWInhibitAcetateCreate%aw_threshold = 0.95d0
+  AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_SMOOTHSTEP_INHIBITION
+
   AWInhibitAcetateCreate%rate_constant = UNINITIALIZED_DOUBLE
+  AWInhibitAcetateCreate%half_saturation_acetate = 4.0d-2
+  AWInhibitAcetateCreate%threshold_acetate = 1.1d-15
+  AWInhibitAcetateCreate%o2_inhibition = 1.0d-6
+  AWInhibitAcetateCreate%fe_inhibition = 1.0d-9
+  AWInhibitAcetateCreate%h_inhibition_above = 2.88d-5
+  AWInhibitAcetateCreate%h_inhibition_below = 2.88d-7
   AWInhibitAcetateCreate%activation_energy = UNINITIALIZED_DOUBLE
   AWInhibitAcetateCreate%reference_temperature = UNINITIALIZED_DOUBLE
-  
-  ! Species indices
+
   AWInhibitAcetateCreate%i_acetate = UNINITIALIZED_INTEGER
-  AWInhibitAcetateCreate%i_h2o = UNINITIALIZED_INTEGER
   AWInhibitAcetateCreate%i_ch4 = UNINITIALIZED_INTEGER
   AWInhibitAcetateCreate%i_hco3 = UNINITIALIZED_INTEGER
   AWInhibitAcetateCreate%i_tracer = UNINITIALIZED_INTEGER
+  AWInhibitAcetateCreate%i_o2 = UNINITIALIZED_INTEGER
+  AWInhibitAcetateCreate%i_fe = UNINITIALIZED_INTEGER
+  AWInhibitAcetateCreate%i_h = UNINITIALIZED_INTEGER
 
   nullify(AWInhibitAcetateCreate%next)
 
@@ -80,9 +89,6 @@ end function AWInhibitAcetateCreate
 ! ************************************************************************** !
 
 subroutine AWInhibitAcetateRead(this,input,option)
-  !
-  ! Reads input deck for water activity inhibited acetoclastic methanogenesis parameters
-  !
 
   use Option_module
   use String_module
@@ -105,8 +111,7 @@ subroutine AWInhibitAcetateRead(this,input,option)
     if (InputCheckExit(input,option)) exit
 
     call InputReadCard(input,option,word)
-    call InputErrorMsg(input,option,'keyword', &
-                       trim(error_string))
+    call InputErrorMsg(input,option,'keyword',trim(error_string))
     call StringToUpper(word)
 
     select case(trim(word))
@@ -121,8 +126,32 @@ subroutine AWInhibitAcetateRead(this,input,option)
       case('RATE_CONSTANT')
         call InputReadDouble(input,option,this%rate_constant)
         call InputErrorMsg(input,option,'rate_constant',error_string)
-        call InputReadAndConvertUnits(input,this%rate_constant,'mol/m^3-sec',&
+        call InputReadAndConvertUnits(input,this%rate_constant,'mol/L-sec',&
                         trim(error_string)//',rate_constant',option)
+
+      case('HALF_SATURATION_ACETATE')
+        call InputReadDouble(input,option,this%half_saturation_acetate)
+        call InputErrorMsg(input,option,'half_saturation_acetate',error_string)
+
+      case('THRESHOLD_ACETATE')
+        call InputReadDouble(input,option,this%threshold_acetate)
+        call InputErrorMsg(input,option,'threshold_acetate',error_string)
+
+      case('O2_INHIBITION')
+        call InputReadDouble(input,option,this%o2_inhibition)
+        call InputErrorMsg(input,option,'o2_inhibition',error_string)
+
+      case('FE_INHIBITION')
+        call InputReadDouble(input,option,this%fe_inhibition)
+        call InputErrorMsg(input,option,'fe_inhibition',error_string)
+
+      case('H_INHIBITION_ABOVE')
+        call InputReadDouble(input,option,this%h_inhibition_above)
+        call InputErrorMsg(input,option,'h_inhibition_above',error_string)
+
+      case('H_INHIBITION_BELOW')
+        call InputReadDouble(input,option,this%h_inhibition_below)
+        call InputErrorMsg(input,option,'h_inhibition_below',error_string)
 
       case('INHIBITION_TYPE')
         call InputReadWord(input,option,word,PETSC_TRUE)
@@ -161,9 +190,6 @@ end subroutine AWInhibitAcetateRead
 ! ************************************************************************** !
 
 subroutine AWInhibitAcetateSetup(this,reaction,option)
-  !
-  ! Sets up the water activity inhibited acetoclastic methanogenesis reaction
-  !
 
   use Option_module
   use Utility_module
@@ -177,32 +203,25 @@ subroutine AWInhibitAcetateSetup(this,reaction,option)
 
   character(len=MAXSTRINGLENGTH) :: word
 
-  ! Check that rate constant is provided
   if (Uninitialized(this%rate_constant)) then
-    option%io_buffer = 'RATE_CONSTANT must be provided for AWInhibitAcetate reaction'
+    option%io_buffer = 'RATE_CONSTANT must be provided for AWInhibitAcetate'
     call PrintErrMsg(option)
   endif
 
-  ! Get species indices for acetoclastic methanogenesis: Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
   word = 'Acetate-'
-  this%i_acetate = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
-  word = 'H2O'
-  this%i_h2o = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
+  this%i_acetate = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
   word = 'CH4(aq)'
-  this%i_ch4 = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
+  this%i_ch4 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
   word = 'HCO3-'
-  this%i_hco3 = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
+  this%i_hco3 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
   word = 'Tracer'
-  this%i_tracer = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  this%i_tracer = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  word = 'O2(aq)'
+  this%i_o2 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  word = 'Fe+++'
+  this%i_fe = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  word = 'H+'
+  this%i_h = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
 
   if (Initialized(this%activation_energy) .and. &
       UnInitialized(this%reference_temperature)) then
@@ -218,11 +237,6 @@ end subroutine AWInhibitAcetateSetup
 subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
                           rt_auxvar,global_auxvar,material_auxvar, &
                           reaction,option)
-  !
-  ! Evaluates the water activity inhibited acetoclastic methanogenesis reaction
-  ! Reaction: Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
-  ! Inhibited below water activity threshold
-  !
 
   use Material_Aux_module
   use Option_module
@@ -236,7 +250,6 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
   type(option_type) :: option
   class(reaction_rt_type) :: reaction
   PetscBool :: compute_derivative
-  ! the following arrays must be declared after reaction
   PetscReal :: Residual(reaction%ncomp)
   PetscReal :: Jacobian(reaction%ncomp,reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -244,25 +257,17 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
   type(material_auxvar_type) :: material_auxvar
 
   PetscInt, parameter :: iphase = 1
-  PetscReal :: L_water
-  PetscReal :: molality_to_molarity
+  PetscReal :: L_water, molality_to_molarity
   PetscReal :: water_activity, aw_inhibition, tempreal
-  PetscReal :: rate_constant
-  PetscReal :: reaction_rate
+  PetscReal :: rate_constant, reaction_rate
+  PetscReal :: C_acetate, C_o2, C_fe, C_h
+  PetscReal :: monod_ac, inhib_o2, inhib_fe, inhib_h_above, inhib_h_below
 
-  ! Concentrations
-  PetscReal :: C_acetate, C_h2o, C_ch4, C_hco3, C_tracer
-
-  ! Calculate water volume in liters
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
-            material_auxvar%volume*1.d3 ! m^3 -> L
-
+            material_auxvar%volume*1.d3
   molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
-
-  ! Get water activity from rt_auxvar
   water_activity = exp(rt_auxvar%ln_act_h2o)
 
-  ! Apply temperature correction if specified
   rate_constant = this%rate_constant
   if (Initialized(this%activation_energy)) then
     rate_constant = rate_constant * Arrhenius(this%activation_energy, &
@@ -270,28 +275,30 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
                                             this%reference_temperature)
   endif
 
-  ! Get aqueous concentrations (convert from molality to molarity)
   C_acetate = rt_auxvar%pri_molal(this%i_acetate) * &
               rt_auxvar%pri_act_coef(this%i_acetate) * molality_to_molarity
-  C_h2o = rt_auxvar%pri_molal(this%i_h2o) * &
-          rt_auxvar%pri_act_coef(this%i_h2o) * molality_to_molarity
-  C_ch4 = rt_auxvar%pri_molal(this%i_ch4) * &
-          rt_auxvar%pri_act_coef(this%i_ch4) * molality_to_molarity
-  C_hco3 = rt_auxvar%pri_molal(this%i_hco3) * &
-           rt_auxvar%pri_act_coef(this%i_hco3) * molality_to_molarity
-  C_tracer = rt_auxvar%pri_molal(this%i_tracer) * &
-             rt_auxvar%pri_act_coef(this%i_tracer) * molality_to_molarity
+  C_o2 = rt_auxvar%pri_molal(this%i_o2) * &
+         rt_auxvar%pri_act_coef(this%i_o2) * molality_to_molarity
+  C_fe = rt_auxvar%pri_molal(this%i_fe) * &
+         rt_auxvar%pri_act_coef(this%i_fe) * molality_to_molarity
+  C_h = rt_auxvar%pri_molal(this%i_h) * &
+        rt_auxvar%pri_act_coef(this%i_h) * molality_to_molarity
 
-  ! Calculate water activity inhibition
+  if (C_acetate < this%threshold_acetate) return
+
+  monod_ac = C_acetate / (this%half_saturation_acetate + C_acetate)
+  inhib_o2 = this%o2_inhibition / (this%o2_inhibition + C_o2)
+  inhib_fe = this%fe_inhibition / (this%fe_inhibition + C_fe)
+  inhib_h_above = this%h_inhibition_above / (this%h_inhibition_above + C_h)
+  ! Monod inhibition BELOW threshold: C / (Ki + C)
+  inhib_h_below = C_h / (this%h_inhibition_below + C_h)
+
   select case(this%inhibition_type)
     case(AWINHIBITACETATE_SMOOTHSTEP_INHIBITION)
-      ! Smooth transition around threshold
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
                                         0.05d0, aw_inhibition, tempreal)
-      ! For smoothstep, we want inhibition when aw < threshold, so invert
       aw_inhibition = 1.d0 - aw_inhibition
     case(AWINHIBITACETATE_THRESHOLD_INHIBITION)
-      ! Sharp threshold
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0
       else
@@ -299,27 +306,13 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
       endif
   end select
 
-  ! Calculate reaction rate: Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
-  ! Rate law assumes first order in Acetate- (H2O concentration is essentially constant)
-  reaction_rate = rate_constant * C_acetate * aw_inhibition
-  
-  ! Convert to mol/sec
+  reaction_rate = rate_constant * monod_ac * inhib_o2 * inhib_fe * &
+                  inhib_h_above * inhib_h_below * aw_inhibition
   reaction_rate = reaction_rate * L_water
 
-  ! Update residuals (negative stoichiometry for reactants, positive for products)
-  ! 1 Acetate- consumed
   Residual(this%i_acetate) = Residual(this%i_acetate) + reaction_rate
-  
-  ! 1 H2O consumed (though this is often negligible compared to solvent water)
-  Residual(this%i_h2o) = Residual(this%i_h2o) + reaction_rate
-  
-  ! 1 CH4(aq) produced
   Residual(this%i_ch4) = Residual(this%i_ch4) - reaction_rate
-  
-  ! 1 HCO3- produced
   Residual(this%i_hco3) = Residual(this%i_hco3) - reaction_rate
-  
-  ! 1 Tracer produced
   Residual(this%i_tracer) = Residual(this%i_tracer) - reaction_rate
 
   if (compute_derivative) then
@@ -335,14 +328,9 @@ end subroutine AWInhibitAcetateEvaluate
 ! ************************************************************************** !
 
 subroutine AWInhibitAcetateDestroy(this)
-  !
-  ! Destroys allocatable or pointer objects created in this module
-  !
 
   implicit none
   class(reaction_sandbox_awinhibitacetate_type) :: this
-
-  ! Nothing to deallocate in this simple version
 
 end subroutine AWInhibitAcetateDestroy
 

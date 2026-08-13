@@ -90,6 +90,9 @@ class Variant:
         kwargs = {
             "enable_cl_inhibition": self.cl_monod,
             "cellulose_hydrolysis": {},
+            # Attribution variants that keep a Cl- smoothstep need the network
+            # methanogenesis reactions present to attach it to.
+            "aw_sandbox_replaces_network_methanogenesis": False,
         }
         if self.cl_smoothstep:
             kwargs["salinity_inhibition"] = {

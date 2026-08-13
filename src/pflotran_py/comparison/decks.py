@@ -150,11 +150,11 @@ def main():
     parser.add_argument(
         "--aw-threshold",
         type=float,
-        default=0.5,
+        default=0.95,
         help=(
-            "Water activity below which the sandboxes inhibit methanogenesis. "
-            "Note that every measured batch sits at 0.824 or above, so at the "
-            "default of 0.5 the sandboxes never engage."
+            "Water activity at which the sandboxes centre their smoothstep. "
+            "Default 0.95 sits at the top of the measured salted range so "
+            "inhibition engages across Exp003/Exp004; it is not a methane fit."
         ),
     )
     parser.add_argument(
@@ -192,9 +192,18 @@ def main():
         "--no-cl-inhibition",
         action="store_true",
         help=(
-            "Drop the reaction network's own chloride Monod inhibition, the "
-            "0.2 mol/L term that also throttles fermentation. Use with "
-            "--salinity-threshold to run one inhibition mechanism at a time."
+            "Drop the reaction network's own chloride Monod inhibition. "
+            "Use when the AWINHIBIT sandboxes own methanogenesis so salt is "
+            "keyed on water activity rather than double-counted via Cl-."
+        ),
+    )
+    parser.add_argument(
+        "--keep-network-methanogenesis",
+        action="store_true",
+        help=(
+            "Leave the network's three methanogenesis reactions in place "
+            "alongside the sandboxes. Attribution only -- with network-rate "
+            "sandboxes this double-produces methane."
         ),
     )
     parser.add_argument(
@@ -219,8 +228,12 @@ def main():
             "threshold": args.salinity_threshold,
             "interval": args.salinity_interval,
         }
+        # Cl- smoothstep attaches to network methanogenesis reactions.
+        extra["aw_sandbox_replaces_network_methanogenesis"] = False
     if args.no_cl_inhibition:
         extra["enable_cl_inhibition"] = False
+    if args.keep_network_methanogenesis:
+        extra["aw_sandbox_replaces_network_methanogenesis"] = False
     if args.disable_reactions:
         extra["disabled_rate_keys"] = set(args.disable_reactions)
 
@@ -257,8 +270,13 @@ def main():
         print(
             f"Note: the driest batch sits at water activity {lowest:.3f}, above the "
             f"sandbox threshold of {args.aw_threshold}. No batch in this set will "
-            f"trigger water-activity inhibition; any modelled salt effect comes from "
-            f"the chloride Monod term instead."
+            f"trigger water-activity inhibition."
+        )
+    else:
+        print()
+        print(
+            f"Sandbox a_w threshold {args.aw_threshold}: engages for batches at "
+            f"or below that water activity (driest measured = {lowest:.3f})."
         )
 
 

@@ -104,8 +104,9 @@ def test_smoothstep_present_only_when_enabled(tmp_path):
     with_step = _deck_text(tmp_path, VARIANTS_BY_KEY["no_cl_monod"], "with")
     without = _deck_text(tmp_path, VARIANTS_BY_KEY["no_salt_terms"], "without")
 
-    assert "TYPE SMOOTHSTEP" in with_step
-    assert "TYPE SMOOTHSTEP" not in without
+    # Cl- smoothstep on the network (SMOOTHSTEP_INTERVAL), not the a_w sandbox.
+    assert "SMOOTHSTEP_INTERVAL" in with_step
+    assert "SMOOTHSTEP_INTERVAL" not in without
 
 
 def test_ceiling_deck_drops_the_sulfate_pathways(tmp_path):

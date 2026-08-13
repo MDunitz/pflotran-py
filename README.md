@@ -554,10 +554,13 @@ double-counting chloride. The flag remains available for attribution runs:
 salinity_inhibition={"species": "Cl-", "threshold": 0.75, "interval": 1.0}
 ```
 
-The AWINHIBIT sandboxes still do not inhibit the reaction network: they add
-parallel methanogenesis pathways at a rate constant of 1e-10 against the
-network's 9.1e-6 for the methylotrophic route. Until those sandboxes carry the
-network rate laws, the comparison's salt story is the network Cl⁻ Monod only.
+The AWINHIBIT sandboxes **own** methanogenesis: each carries the matching
+network Monod rate law (same rate constant, half-saturations, and O₂/Fe/H⁺
+inhibition) and multiplies by an a_w smoothstep. The network's three
+methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
+double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
+and `--aw-threshold 0.95` (top of the measured salted range; not a methane
+fit). Rebuild the container after pulling sandbox Fortran changes.
 
 ### Running it
 
@@ -566,11 +569,10 @@ network rate laws, the comparison's salt story is the network Cl⁻ Monod only.
 python -m pflotran_py.comparison.brines --output data/incubation_batch_composition.csv
 
 # 2. Build one closed-batch deck per measured batch.
-#    No --salinity-threshold: the fitted Cl- smoothstep is retired (see
-#    "Attributing the modelled salt suppression"). The network's own 0.2 M
-#    Cl- Monod remains.
+#    AWINHIBIT sandboxes own methanogenesis (network Monod rates + a_w).
+#    Cl- Monod is off so salt is not double-counted.
 python -m pflotran_py.comparison.decks --output-dir decks \
-    --cellulose-hydrolysis
+    --cellulose-hydrolysis --no-cl-inhibition --aw-threshold 0.95
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
@@ -749,19 +751,15 @@ which it cannot.
 ### What the comparison currently shows
 
 With the domain sealed, a real methane gas phase, coupled carbonate, the carbon
-pool matched to recipe-derived starting C (~0.0565 mol), and **only** the
-network's legacy 0.2 M Cl⁻ Monod (fitted smoothstep retired), absolute mole
-comparisons share a carbon budget with the incubations and no longer double-
-count chloride. The diagnostic `no_smoothstep` variant is what the comparison
-figures now track.
+pool matched to recipe-derived starting C (~0.0565 mol), and **AWINHIBIT
+sandboxes owning methanogenesis** (network Monod kinetics × a_w smoothstep at
+threshold 0.95; network methanogenesis and Cl⁻ Monod off), salt stress is keyed
+on water activity rather than double-counted chloride.
 
-The water-activity sandboxes remain disconnected from all of this. They inhibit
-their own parallel methanogenesis pathways rather than the network's, at a rate
-constant five orders of magnitude smaller, so raising their threshold until they
-are fully engaged in every bottle still changes modelled methane by under one
-percent. Making them the mechanism rather than a bystander would mean giving
-them the network's rate laws and removing the network's own methanogenesis, so
-that the two do not double-count.
+The fitted Cl⁻ smoothstep remains retired (see the inhibition diagnostic). The
+a_w threshold is placed at the top of the measured salted range so inhibition
+engages across Exp003/Exp004; it is not fitted to methane yields. Re-run decks
+after rebuilding the container image that patches the sandbox Fortran.
 
 One limit is not addressable from a deck. PFLOTRAN computes water activity as
 `1 - 0.017 * sum(molality)`, ideal Raoult with no osmotic coefficient, so it
