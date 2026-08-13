@@ -13,6 +13,10 @@ module Reaction_Sandbox_AWInhibit_class
 
   PetscInt, parameter :: AWINHIBIT_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBIT_SMOOTHSTEP_INHIBITION = 2
+  ! Continuous osmoregulation-style factor: f = max(0,(a_w - a_crit)/(1 - a_crit))
+  ! with a_crit = WATER_ACTIVITY_THRESHOLD. Spans the measured a_w range rather
+  ! than a ~0.1-wide log10 smoothstep cliff.
+  PetscInt, parameter :: AWINHIBIT_ONE_MINUS_AW_INHIBITION = 3
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibit_type
@@ -187,6 +191,8 @@ subroutine AWInhibitRead(this,input,option)
             this%inhibition_type = AWINHIBIT_THRESHOLD_INHIBITION
           case('SMOOTHSTEP')
             this%inhibition_type = AWINHIBIT_SMOOTHSTEP_INHIBITION
+          case('ONE_MINUS_AW')
+            this%inhibition_type = AWINHIBIT_ONE_MINUS_AW_INHIBITION
           case default
             error_string = trim(error_string) // ',INHIBITION_TYPE'
             call InputKeywordUnrecognized(input,word,error_string ,option)
@@ -336,8 +342,21 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
       ! Positive threshold => INHIBIT_BELOW polarity: factor -> 1 as a_w rises
       ! above the threshold (rate on when wet). Do not invert -- the old
       ! 1-factor flipped that and made salt *increase* methane.
+      ! Interval 0.20 (log10) spans roughly a_w 0.75-1.2 around a 0.95 centre,
+      ! wider than the historical 0.05 cliff (~0.90-1.00).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.05d0, aw_inhibition, tempreal)
+                                        0.20d0, aw_inhibition, tempreal)
+    case(AWINHIBIT_ONE_MINUS_AW_INHIBITION)
+      ! Compatible-solute / turgor cost rises with (1 - a_w). Linear map from
+      ! a_crit (rate zero) to a_w = 1 (rate uninhibited).
+      if (this%aw_threshold >= 1.d0) then
+        aw_inhibition = 1.d0
+      else if (water_activity <= this%aw_threshold) then
+        aw_inhibition = 0.d0
+      else
+        aw_inhibition = (water_activity - this%aw_threshold) / &
+                        (1.d0 - this%aw_threshold)
+      endif
     case(AWINHIBIT_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0

@@ -559,7 +559,8 @@ network Monod rate law (same rate constant, half-saturations, and O₂/Fe/H⁺
 inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
-and `--aw-threshold 0.95` (top of the measured salted range; not a methane
+and `--aw-inhibition-type ONE_MINUS_AW --aw-threshold 0.80` (continuous
+`(a_w − a_crit)/(1 − a_crit)` across the measured range; not a methane
 fit), and pass each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
 so inhibition is not keyed on PFLOTRAN's ideal Raoult estimate (which is too
 high for Mg brines). Rebuild the container after pulling sandbox Fortran
@@ -575,7 +576,8 @@ python -m pflotran_py.comparison.brines --output data/incubation_batch_compositi
 #    AWINHIBIT sandboxes own methanogenesis (network Monod rates + a_w).
 #    Cl- Monod is off so salt is not double-counted.
 python -m pflotran_py.comparison.decks --output-dir decks \
-    --cellulose-hydrolysis --no-cl-inhibition --aw-threshold 0.95
+    --cellulose-hydrolysis --no-cl-inhibition \
+    --aw-inhibition-type ONE_MINUS_AW --aw-threshold 0.80
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
