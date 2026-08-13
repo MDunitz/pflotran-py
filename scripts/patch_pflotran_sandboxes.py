@@ -71,6 +71,35 @@ reaction_sandbox_awinhibitmethyl.o : \\
   reaction_aux.o
 """
 
+# Anchors / markers used when inserting custom sandboxes into PFLOTRAN sources.
+# Prefer the stock Radon use-line; fall back to AWINHIBIT methyl after a prior patch.
+USE_ANCHORS = (
+    "  use Reaction_Sandbox_Radon_class",
+    "  use Reaction_Sandbox_AWInhibitMethyl_class",
+)
+# Insert new select-case arms immediately before the default arm.
+CASE_DEFAULT_ANCHOR = "      case default"
+OBJECT_FILE_ANCHORS = (
+    "\t${common_src}reaction_sandbox_awinhibitmethyl.o \\",
+    "\t${common_src}reaction_sandbox_ufd_wp.o \\",
+)
+REACTION_SANDBOX_DEP_ANCHORS = (
+    "  reaction_sandbox_awinhibitmethyl.o\\",
+    "  reaction_sandbox_awinhibitmethyl.o \\",
+    "  reaction_sandbox_ufd_wp.o \\",
+)
+# Substring that marks a module as extending BioHill (needs biohill.o dep).
+BIOHILL_CLASS_MARKER = "Reaction_Sandbox_BioHill_class"
+SKIP_EXTRA_STEMS = frozenset(
+    {
+        "awinhibit",
+        "awinhibitacetate",
+        "awinhibitmethyl",
+        "template",
+        "aq",
+    }
+)
+
 _F90_STEM_RE = re.compile(r"^reaction_sandbox_(.+)\.F90$")
 _MODULE_RE = re.compile(
     r"^\s*module\s+(Reaction_Sandbox_(\w+)_class)\s*$", re.IGNORECASE
@@ -97,12 +126,11 @@ def patch_reaction_sandbox_f90(path: Path) -> None:
         1,
     )
 
-    anchor = "      case default"
-    if anchor not in text:
+    if CASE_DEFAULT_ANCHOR not in text:
         raise RuntimeError(f"Could not find case-anchor in {path}")
     text = text.replace(
-        anchor,
-        "\n".join(CASE_LINES) + "\n" + anchor,
+        CASE_DEFAULT_ANCHOR,
+        "\n".join(CASE_LINES) + "\n" + CASE_DEFAULT_ANCHOR,
         1,
     )
     path.write_text(text)
@@ -152,13 +180,7 @@ def _discover_extra_modules(extra_dir: Path) -> list[dict[str, str]]:
         if not stem_m:
             continue
         stem = stem_m.group(1)
-        if stem in {
-            "awinhibit",
-            "awinhibitacetate",
-            "awinhibitmethyl",
-            "template",
-            "aq",
-        }:
+        if stem in SKIP_EXTRA_STEMS:
             continue
 
         text = path.read_text()
@@ -195,6 +217,33 @@ def _discover_extra_modules(extra_dir: Path) -> list[dict[str, str]]:
     return modules
 
 
+def _needs_biohill_dep(src_text: str) -> bool:
+    """True when the Fortran module extends BioHill and needs biohill.o."""
+    return BIOHILL_CLASS_MARKER in src_text
+
+
+def _build_module_dep_block(obj_name: str, src_text: str) -> str:
+    """Build a pflotran_dependencies.txt stanza for one sandbox object."""
+    extra_deps = ""
+    if _needs_biohill_dep(src_text):
+        extra_deps = "  reaction_sandbox_biohill.o \\\n"
+    return (
+        f"{obj_name} : \\\n"
+        f"{extra_deps}"
+        f"  reaction_sandbox_base.o \\\n"
+        f"  reactive_transport_aux.o \\\n"
+        f"  global_aux.o \\\n"
+        f"  reaction_aux.o\n"
+    )
+
+
+def _first_present_anchor(text: str, anchors: tuple[str, ...]) -> str | None:
+    for anchor in anchors:
+        if anchor in text:
+            return anchor
+    return None
+
+
 def patch_extra_sandbox(pflotran_src: Path, extra_dir: Path) -> list[str]:
     """Copy and register generated modules from a custom_* directory."""
     modules = _discover_extra_modules(extra_dir)
@@ -214,11 +263,8 @@ def patch_extra_sandbox(pflotran_src: Path, extra_dir: Path) -> list[str]:
 
         use_line = f"  use {mod['module']}"
         if use_line not in rs_text:
-            anchor = "  use Reaction_Sandbox_Radon_class"
-            if anchor not in rs_text:
-                # Fall back: after AWINHIBIT methyl use if present
-                anchor = "  use Reaction_Sandbox_AWInhibitMethyl_class"
-            if anchor not in rs_text:
+            anchor = _first_present_anchor(rs_text, USE_ANCHORS)
+            if anchor is None:
                 raise RuntimeError(f"Could not find use-anchor in {rs_path}")
             rs_text = rs_text.replace(anchor, anchor + "\n" + use_line, 1)
 
@@ -227,57 +273,30 @@ def patch_extra_sandbox(pflotran_src: Path, extra_dir: Path) -> list[str]:
             f"        new_sandbox => {mod['create']}()"
         )
         if f"case('{mod['keyword']}')" not in rs_text:
-            anchor = "      case default"
-            if anchor not in rs_text:
+            if CASE_DEFAULT_ANCHOR not in rs_text:
                 raise RuntimeError(f"Could not find case-anchor in {rs_path}")
-            rs_text = rs_text.replace(anchor, case_block + "\n" + anchor, 1)
+            rs_text = rs_text.replace(
+                CASE_DEFAULT_ANCHOR, case_block + "\n" + CASE_DEFAULT_ANCHOR, 1
+            )
 
         obj_line = f"\t${{common_src}}reaction_sandbox_{mod['stem']}.o \\"
         if f"reaction_sandbox_{mod['stem']}.o" not in obj_text:
-            # Prefer after awinhibitmethyl if present, else ufd_wp
-            for anchor in (
-                "\t${common_src}reaction_sandbox_awinhibitmethyl.o \\",
-                "\t${common_src}reaction_sandbox_ufd_wp.o \\",
-            ):
-                if anchor in obj_text:
-                    obj_text = obj_text.replace(anchor, anchor + "\n" + obj_line, 1)
-                    break
-            else:
+            anchor = _first_present_anchor(obj_text, OBJECT_FILE_ANCHORS)
+            if anchor is None:
                 raise RuntimeError(f"Could not find object-file anchor in {obj_path}")
+            obj_text = obj_text.replace(anchor, anchor + "\n" + obj_line, 1)
 
         obj_name = f"reaction_sandbox_{mod['stem']}.o"
         if obj_name not in dep_text:
-            # Add to reaction_sandbox.o dependency list
-            for anchor in (
-                "  reaction_sandbox_awinhibitmethyl.o\\",
-                "  reaction_sandbox_awinhibitmethyl.o \\",
-                "  reaction_sandbox_ufd_wp.o \\",
-            ):
-                if anchor in dep_text:
-                    dep_text = dep_text.replace(
-                        anchor,
-                        anchor + f"\n  {obj_name}\\",
-                        1,
-                    )
-                    break
-            else:
+            anchor = _first_present_anchor(dep_text, REACTION_SANDBOX_DEP_ANCHORS)
+            if anchor is None:
                 raise RuntimeError(
                     f"Could not find reaction_sandbox.o dep anchor in {dep_path}"
                 )
+            dep_text = dep_text.replace(anchor, anchor + f"\n  {obj_name}\\", 1)
 
-            # Modules that extend BioHill need that object as a dependency.
             src_text = Path(mod["path"]).read_text()
-            extra_deps = ""
-            if "Reaction_Sandbox_BioHill_class" in src_text:
-                extra_deps = "  reaction_sandbox_biohill.o \\\n"
-            dep_block = (
-                f"{obj_name} : \\\n"
-                f"{extra_deps}"
-                f"  reaction_sandbox_base.o \\\n"
-                f"  reactive_transport_aux.o \\\n"
-                f"  global_aux.o \\\n"
-                f"  reaction_aux.o\n"
-            )
+            dep_block = _build_module_dep_block(obj_name, src_text)
             if dep_block.strip() not in dep_text:
                 dep_text = dep_text.rstrip() + "\n" + dep_block + "\n"
 
