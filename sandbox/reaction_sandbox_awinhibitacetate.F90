@@ -295,9 +295,9 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
 
   select case(this%inhibition_type)
     case(AWINHIBITACETATE_SMOOTHSTEP_INHIBITION)
+      ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
                                         0.05d0, aw_inhibition, tempreal)
-      aw_inhibition = 1.d0 - aw_inhibition
     case(AWINHIBITACETATE_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0

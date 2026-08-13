@@ -313,9 +313,11 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
 
   select case(this%inhibition_type)
     case(AWINHIBIT_SMOOTHSTEP_INHIBITION)
+      ! Positive threshold => INHIBIT_BELOW polarity: factor -> 1 as a_w rises
+      ! above the threshold (rate on when wet). Do not invert -- the old
+      ! 1-factor flipped that and made salt *increase* methane.
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
                                         0.05d0, aw_inhibition, tempreal)
-      aw_inhibition = 1.d0 - aw_inhibition
     case(AWINHIBIT_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0
