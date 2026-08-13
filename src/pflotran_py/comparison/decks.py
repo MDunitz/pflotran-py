@@ -188,6 +188,26 @@ def main():
         default=0.5,
         help="Width of that transition, in decades.",
     )
+    parser.add_argument(
+        "--no-cl-inhibition",
+        action="store_true",
+        help=(
+            "Drop the reaction network's own chloride Monod inhibition, the "
+            "0.2 mol/L term that also throttles fermentation. Use with "
+            "--salinity-threshold to run one inhibition mechanism at a time."
+        ),
+    )
+    parser.add_argument(
+        "--disable-reactions",
+        nargs="+",
+        default=None,
+        metavar="RATE_KEY",
+        help=(
+            "Omit these reactions from the deck by rate key, e.g. "
+            "sulfate_reduction methane_so4_oxidation. For mechanism "
+            "attribution only; a deck built this way is not a prediction."
+        ),
+    )
     args = parser.parse_args()
 
     extra = {}
@@ -199,6 +219,10 @@ def main():
             "threshold": args.salinity_threshold,
             "interval": args.salinity_interval,
         }
+    if args.no_cl_inhibition:
+        extra["enable_cl_inhibition"] = False
+    if args.disable_reactions:
+        extra["disabled_rate_keys"] = set(args.disable_reactions)
 
     if os.path.exists(args.composition):
         table = pd.read_csv(args.composition)

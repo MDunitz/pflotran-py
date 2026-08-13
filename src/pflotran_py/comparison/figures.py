@@ -1,6 +1,7 @@
 """Figures comparing the closed-batch model against the measured incubations.
 
-Four figures, each answering a different question.
+Four absolute-mole figures, each answering a different question, plus companion
+figures that divide both sides by the model's starting carbon inventory.
 
 **Methane over time** asks whether the model reproduces the measured trajectory
 in each bottle. Measured replicates are drawn as points, the model as a line,
@@ -20,6 +21,13 @@ on the figure. See :func:`plot_carbon_dioxide`.
 **Measured against modelled** puts the two on opposite axes with the line of
 equality drawn, one point per batch condition. It is the most direct reading of
 how well the model does and in which direction it errs.
+
+**Per starting C companions** re-express the methane and carbon dioxide
+timeseries, and the parity figure, as moles of headspace gas per mole of
+starting carbon. The denominator matches the incubations' recipe-derived
+biomass C (~0.0565 mol; see :mod:`.carbon_inventory` and the README "Starting
+carbon" section). Prefer these for yield questions; absolute-mole overlays
+remain useful for trajectory shape and salt ranking.
 
 Every colour comes from ``palette.json`` in this directory, whose anchors are
 the colourblind-safe values adopted across the measurement repository. Hue
@@ -41,6 +49,9 @@ from astropy import units as u  # noqa: E402
 
 from ..analysis.extract import extract_pflotran_data_hdf5  # noqa: E402
 from ..analysis.extract import find_hdf5_output  # noqa: E402
+from .carbon_inventory import (  # noqa: E402
+    default_comparison_starting_carbon_moles,
+)
 from .headspace import (  # noqa: E402
     GASES,
     aqueous_concentration_to_headspace_moles,
@@ -76,6 +87,17 @@ def colour_for_brine(brine_name):
     else:
         level = "low"
     return PALETTE[f"{family}_{level}"]
+
+
+def _per_starting_c(values, starting_carbon_moles):
+    """Divide headspace moles by the model's starting carbon inventory."""
+    return np.asarray(values, dtype=float) / float(starting_carbon_moles)
+
+
+def _gas_amount_label(gas_name, per_starting_c):
+    if per_starting_c:
+        return f"{gas_name} in the bottle headspace (mol per mol starting C)"
+    return f"{gas_name} in the bottle headspace (moles)"
 
 
 def salt_family(brine_name):
@@ -183,8 +205,17 @@ def assemble(composition, run_root, ecsv_glob, molecule="CH4_FID"):
 # ═════════════════════════════════════════════════════════════════════
 
 
-def plot_methane_timeseries(paired, output_path):
+def plot_methane_timeseries(
+    paired,
+    output_path,
+    *,
+    per_starting_c=False,
+    starting_carbon_moles=None,
+):
     """Measured and modelled methane in the headspace, over the incubation."""
+    if per_starting_c and starting_carbon_moles is None:
+        starting_carbon_moles = default_comparison_starting_carbon_moles()
+
     families = ["Sodium chloride", "Magnesium chloride", "Artificial sea salt"]
     figure, axes = plt.subplots(1, 3, figsize=(16, 5.5), sharey=True)
 
@@ -216,13 +247,21 @@ def plot_methane_timeseries(paired, output_path):
             label = f"{name}, water activity {batch['Measured Water Activity']:.3f}"
 
             days, moles = model_methane_headspace(entry["model"], batch)
-            axis.plot(days, moles, color=colour, linewidth=2, alpha=0.9, zorder=2)
+            y_model = (
+                _per_starting_c(moles, starting_carbon_moles)
+                if per_starting_c
+                else moles
+            )
+            axis.plot(days, y_model, color=colour, linewidth=2, alpha=0.9, zorder=2)
 
             points = entry["measured"]
             if len(points):
+                y_meas = points["Cumulative Moles"]
+                if per_starting_c:
+                    y_meas = _per_starting_c(y_meas, starting_carbon_moles)
                 axis.scatter(
                     points["Days since start"],
-                    points["Cumulative Moles"],
+                    y_meas,
                     color=colour,
                     s=26,
                     edgecolor="white",
@@ -235,27 +274,43 @@ def plot_methane_timeseries(paired, output_path):
         # Clipped to the range the data occupies. The model starts from a
         # numerical floor near 1e-15, and letting the axis chase it would
         # compress every measured point into a sliver at the top.
-        axis.set_ylim(1e-9, 5e-3)
+        y_lo, y_hi = (1e-9, 5e-3)
+        if per_starting_c:
+            y_lo, y_hi = y_lo / starting_carbon_moles, y_hi / starting_carbon_moles
+        axis.set_ylim(y_lo, y_hi)
         axis.set_xlim(-3, 133)
         axis.set_xlabel("Days since start of incubation")
         axis.set_title(family, fontsize=12)
         axis.grid(True, alpha=0.25, linewidth=0.5)
         axis.legend(fontsize=7.5, loc="lower right", framealpha=0.95)
 
-    axes[0].set_ylabel("Methane in the bottle headspace (moles)")
+    axes[0].set_ylabel(_gas_amount_label("Methane", per_starting_c))
 
-    figure.suptitle(
-        "Modelled and measured methane in sealed incubation bottles",
-        fontsize=14,
-        y=0.99,
-    )
+    if per_starting_c:
+        title = (
+            "Modelled and measured methane per mole of starting carbon "
+            "in sealed incubation bottles"
+        )
+        footnote = (
+            "Lines are the reactive-transport model; filled circles are gas-chromatograph "
+            "measurements of individual bottles.\n"
+            f"Both sides are divided by the model's starting carbon inventory "
+            f"({starting_carbon_moles:.3f} mol C; cellulose hydrolysis pool). "
+            "Vertical axis is logarithmic."
+        )
+    else:
+        title = "Modelled and measured methane in sealed incubation bottles"
+        footnote = (
+            "Lines are the reactive-transport model; filled circles are gas-chromatograph "
+            "measurements of individual bottles.\n"
+            "Colour identifies the brine; darker shades are more concentrated. Vertical axis "
+            "is logarithmic."
+        )
+    figure.suptitle(title, fontsize=14, y=0.99)
     figure.text(
         0.5,
         0.005,
-        "Lines are the reactive-transport model; filled circles are gas-chromatograph "
-        "measurements of individual bottles.\n"
-        "Colour identifies the brine; darker shades are more concentrated. Vertical axis "
-        "is logarithmic.",
+        footnote,
         ha="center",
         fontsize=9,
         color=PALETTE["guide"],
@@ -498,7 +553,14 @@ def model_carbon_dioxide_headspace(run_frame, batch_row):
     return None if series is None else series[-1]
 
 
-def plot_carbon_dioxide(paired, ecsv_glob, output_path):
+def plot_carbon_dioxide(
+    paired,
+    ecsv_glob,
+    output_path,
+    *,
+    per_starting_c=False,
+    starting_carbon_moles=None,
+):
     """Measured and modelled carbon dioxide in the headspace, over the incubation.
 
     Overlaid on shared axes, in the same layout as the methane figure, because
@@ -514,12 +576,20 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
     measurements alone, with the reason stated on the figure rather than left
     for the reader to infer from a suspiciously horizontal curve.
     """
+    if per_starting_c and starting_carbon_moles is None:
+        starting_carbon_moles = default_comparison_starting_carbon_moles()
+
     measured = load_measured(ecsv_glob, "CO2")
     predictable = [
         entry
         for entry in paired
         if COUPLED_CARBON_DIOXIDE_COLUMN in entry["model"].columns
     ]
+
+    def _y(values):
+        if per_starting_c:
+            return _per_starting_c(values, starting_carbon_moles)
+        return values
 
     if not predictable:
         figure, axis = plt.subplots(figsize=(8, 5.5))
@@ -532,7 +602,7 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
             if len(points):
                 axis.scatter(
                     points["Days since start"],
-                    points["Cumulative Moles"],
+                    _y(points["Cumulative Moles"]),
                     color=colour_for_brine(batch["Brine Name"]),
                     s=24,
                     edgecolor="white",
@@ -540,17 +610,32 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
                 )
         axis.set_yscale("log")
         axis.set_xlabel("Days since start of incubation")
-        axis.set_ylabel("Carbon dioxide in the headspace (moles)")
-        axis.set_title(
-            "Measured carbon dioxide; the model cannot predict it", fontsize=12
-        )
+        axis.set_ylabel(_gas_amount_label("Carbon dioxide", per_starting_c))
+        if per_starting_c:
+            axis.set_title(
+                "Measured carbon dioxide per mole of starting carbon",
+                fontsize=12,
+            )
+            caveat = (
+                f"Measurements only — modelled CO2 curves need the HDF5 runs "
+                f"(re-run comparison.figures after run_decks).\n"
+                f"Values are divided by the model's starting carbon inventory "
+                f"({starting_carbon_moles:.3f} mol C; cellulose hydrolysis pool)."
+            )
+        else:
+            axis.set_title(
+                "Measured carbon dioxide; the model cannot predict it", fontsize=12
+            )
+            caveat = (
+                "These decks were built without coupled carbonate, so dissolved carbon dioxide "
+                "never moves from its\ninitial value and there is no modelled curve to draw. "
+                "Rebuild with couple_carbonate to compare."
+            )
         axis.grid(True, alpha=0.25, linewidth=0.5)
         figure.text(
             0.5,
             0.01,
-            "These decks were built without coupled carbonate, so dissolved carbon dioxide "
-            "never moves from its\ninitial value and there is no modelled curve to draw. "
-            "Rebuild with couple_carbonate to compare.",
+            caveat,
             ha="center",
             fontsize=9,
             color=PALETTE["guide"],
@@ -589,7 +674,9 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
 
             days, moles = model_carbon_dioxide_series(entry["model"], batch)
             if days is not None:
-                axis.plot(days, moles, color=colour, linewidth=2, alpha=0.9, zorder=2)
+                axis.plot(
+                    days, _y(moles), color=colour, linewidth=2, alpha=0.9, zorder=2
+                )
 
             points = measured[
                 (measured["Experiment"] == batch["Experiment"])
@@ -598,7 +685,7 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
             if len(points):
                 axis.scatter(
                     points["Days since start"],
-                    points["Cumulative Moles"],
+                    _y(points["Cumulative Moles"]),
                     color=colour,
                     s=26,
                     edgecolor="white",
@@ -608,27 +695,43 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
                 )
 
         axis.set_yscale("log")
-        axis.set_ylim(1e-7, 3e-3)
+        y_lo, y_hi = (1e-7, 3e-3)
+        if per_starting_c:
+            y_lo, y_hi = y_lo / starting_carbon_moles, y_hi / starting_carbon_moles
+        axis.set_ylim(y_lo, y_hi)
         axis.set_xlim(-3, 133)
         axis.set_xlabel("Days since start of incubation")
         axis.set_title(family, fontsize=12)
         axis.grid(True, alpha=0.25, linewidth=0.5)
         axis.legend(fontsize=7.5, loc="lower right", framealpha=0.95)
 
-    axes[0].set_ylabel("Carbon dioxide in the bottle headspace (moles)")
+    axes[0].set_ylabel(_gas_amount_label("Carbon dioxide", per_starting_c))
 
-    figure.suptitle(
-        "Modelled and measured carbon dioxide in sealed incubation bottles",
-        fontsize=14,
-        y=0.99,
-    )
+    if per_starting_c:
+        title = (
+            "Modelled and measured carbon dioxide per mole of starting carbon "
+            "in sealed incubation bottles"
+        )
+        footnote = (
+            "Lines are the reactive-transport model; filled circles are gas-chromatograph "
+            "measurements of individual bottles.\n"
+            f"Both sides are divided by the model's starting carbon inventory "
+            f"({starting_carbon_moles:.3f} mol C; cellulose hydrolysis pool). "
+            "No parameter was fitted against carbon dioxide."
+        )
+    else:
+        title = "Modelled and measured carbon dioxide in sealed incubation bottles"
+        footnote = (
+            "Lines are the reactive-transport model; filled circles are gas-chromatograph "
+            "measurements of individual bottles.\n"
+            "No parameter anywhere in this model was fitted against carbon dioxide, so both the "
+            "level and the shape here are predictions."
+        )
+    figure.suptitle(title, fontsize=14, y=0.99)
     figure.text(
         0.5,
         0.005,
-        "Lines are the reactive-transport model; filled circles are gas-chromatograph "
-        "measurements of individual bottles.\n"
-        "No parameter anywhere in this model was fitted against carbon dioxide, so both the "
-        "level and the shape here are predictions.",
+        footnote,
         ha="center",
         fontsize=9,
         color=PALETTE["guide"],
@@ -644,7 +747,14 @@ def plot_carbon_dioxide(paired, ecsv_glob, output_path):
 # ═════════════════════════════════════════════════════════════════════
 
 
-def plot_measured_against_modelled(paired, ecsv_glob, output_path):
+def plot_measured_against_modelled(
+    paired,
+    ecsv_glob,
+    output_path,
+    *,
+    per_starting_c=False,
+    starting_carbon_moles=None,
+):
     """Measured on one axis, modelled on the other, with the line of equality.
 
     The most direct reading of the comparison. A point on the diagonal is a
@@ -654,6 +764,9 @@ def plot_measured_against_modelled(paired, ecsv_glob, output_path):
     -- generous, but the honest resolution of a comparison whose inputs carry
     the uncertainties described in the module docstring.
     """
+    if per_starting_c and starting_carbon_moles is None:
+        starting_carbon_moles = default_comparison_starting_carbon_moles()
+
     measured_co2 = load_measured(ecsv_glob, "CO2")
 
     figure, (left, right) = plt.subplots(1, 2, figsize=(13.5, 6.4))
@@ -691,6 +804,10 @@ def plot_measured_against_modelled(paired, ecsv_glob, output_path):
             if measured <= 0 or modelled <= 0:
                 continue
 
+            if per_starting_c:
+                measured = measured / starting_carbon_moles
+                modelled = modelled / starting_carbon_moles
+
             pairs.append((measured, modelled))
             axis.scatter(
                 measured,
@@ -706,7 +823,7 @@ def plot_measured_against_modelled(paired, ecsv_glob, output_path):
             continue
 
         values = np.array(pairs)
-        low = min(values.min() * 0.3, 1e-8)
+        low = min(values.min() * 0.3, 1e-8 if not per_starting_c else 1e-8 / starting_carbon_moles)
         high = values.max() * 3
         line = np.array([low, high])
 
@@ -725,8 +842,9 @@ def plot_measured_against_modelled(paired, ecsv_glob, output_path):
         axis.set_xlim(low, high)
         axis.set_ylim(low, high)
         axis.set_aspect("equal")
-        axis.set_xlabel(f"Measured {gas_label.lower()} in the headspace (moles)")
-        axis.set_ylabel(f"Modelled {gas_label.lower()} in the headspace (moles)")
+        unit = "mol per mol starting C" if per_starting_c else "moles"
+        axis.set_xlabel(f"Measured {gas_label.lower()} in the headspace ({unit})")
+        axis.set_ylabel(f"Modelled {gas_label.lower()} in the headspace ({unit})")
 
         ratios = np.log10(values[:, 1] / values[:, 0])
         within = np.mean(np.abs(ratios) <= 1)
@@ -802,11 +920,14 @@ def plot_measured_against_modelled(paired, ecsv_glob, output_path):
         bbox_to_anchor=(0.5, 0.02),
     )
 
-    figure.suptitle(
-        "Measured against modelled production, one point per batch condition",
-        fontsize=13.5,
-        y=0.98,
-    )
+    if per_starting_c:
+        title = (
+            "Measured against modelled production per mole of starting carbon, "
+            "one point per batch"
+        )
+    else:
+        title = "Measured against modelled production, one point per batch condition"
+    figure.suptitle(title, fontsize=13.5, y=0.98)
     figure.tight_layout(rect=[0, 0.09, 1, 0.95])
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
@@ -831,6 +952,15 @@ def main():
         ),
     )
     parser.add_argument("--output-dir", default=os.path.join("output", "comparison"))
+    parser.add_argument(
+        "--starting-carbon-moles",
+        type=float,
+        default=None,
+        help=(
+            "Denominator for the per-starting-C companions. Defaults to the "
+            "cellulose-hydrolysis inventory used by the comparison pipeline."
+        ),
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -839,6 +969,10 @@ def main():
 
     if not paired:
         raise SystemExit("No model runs paired with measurements; nothing to plot.")
+
+    starting_c = args.starting_carbon_moles
+    if starting_c is None:
+        starting_c = default_comparison_starting_carbon_moles()
 
     written = [
         plot_methane_timeseries(
@@ -855,9 +989,30 @@ def main():
             args.ecsv_glob,
             os.path.join(args.output_dir, "measured_vs_modelled.png"),
         ),
+        plot_methane_timeseries(
+            paired,
+            os.path.join(args.output_dir, "methane_over_time_per_starting_c.png"),
+            per_starting_c=True,
+            starting_carbon_moles=starting_c,
+        ),
+        plot_carbon_dioxide(
+            paired,
+            args.ecsv_glob,
+            os.path.join(args.output_dir, "carbon_dioxide_per_starting_c.png"),
+            per_starting_c=True,
+            starting_carbon_moles=starting_c,
+        ),
+        plot_measured_against_modelled(
+            paired,
+            args.ecsv_glob,
+            os.path.join(args.output_dir, "measured_vs_modelled_per_starting_c.png"),
+            per_starting_c=True,
+            starting_carbon_moles=starting_c,
+        ),
     ]
 
     print(f"Paired {len(paired)} batches.")
+    print(f"Starting carbon inventory for companions: {starting_c:.6f} mol C")
     for path in written:
         print(f"  wrote {path}")
 

@@ -48,6 +48,11 @@ cd batch/
 python run_inhibition_test.py --multiplier 5  # A: Cl⁻ only, B: aₓ only, C: both
 ```
 
+For the bottle decks there is a wider five-variant version that also separates
+the two chloride terms from sulfate competition and from the carbon-supply
+ceiling; see [Attributing the modelled salt
+suppression](#attributing-the-modelled-salt-suppression).
+
 ### 3. Run PFLOTRAN simulations
 
 ```bash
@@ -526,9 +531,10 @@ glucose's solubility limit. PFLOTRAN computes water activity as
 `1 - 0.017 * sum(molality)`, counting every solute, so at that concentration the
 organic pool contributed about ninety percent of the osmolality in an unsalted
 bottle: the model's control sat at a water activity of 0.909 while the meter
-read 1.000. With hydrolysis on, the unsalted bottle holds 0.032 mol/L of
-dissolved organic matter and comes out at 0.9927, and water activity becomes 85
-to 90 percent salt-driven in the salted bottles instead of 5 to 55 percent.
+read 1.000. With hydrolysis on, dissolved DOM1 is millimolar and water activity
+is salt-driven; the solid pool's volume fraction is set so total starting C
+matches the incubations' recipe-derived biomass carbon (~0.0565 mol; VF
+0.012182). See "Starting carbon" below.
 
 This uses the `Cellulose_min` record already in the database, which needed one
 repair: it declares two species but carries two surplus fields, and its second
@@ -536,32 +542,22 @@ species has a coefficient of zero that PFLOTRAN drops, so the deck is refused
 with a species-count mismatch. `write_bottle_database()` fixes the record
 alongside the methane one, leaving the chemistry unchanged.
 
-**`salinity_inhibition`** adds a sigmoidal inhibition term to the network's
-three methane-producing reactions:
+**`salinity_inhibition`** (optional) adds a sigmoidal Cl⁻ term on top of the
+network's own methanogenesis reactions. The comparison pipeline **does not**
+pass it any more. The inhibition diagnostic showed that fitted smoothstep
+(threshold 0.75 mol/L, interval 1.0) was responsible for an ~850× collapse onto
+a methane floor at mid/high salt, while the network's legacy 0.2 M Cl⁻ Monod
+alone gives a gradual decline closer to the measured shape. Keeping both was
+double-counting chloride. The flag remains available for attribution runs:
 
 ```python
 salinity_inhibition={"species": "Cl-", "threshold": 0.75, "interval": 1.0}
 ```
 
-Those two numbers are fitted. See "Which numbers were fitted, and which were
-not" below for how, and for the held-out test.
-
-It exists because the AWINHIBIT sandboxes do not inhibit the reaction network.
-They add their own parallel copies of the three methanogenesis pathways, at a
-rate constant of 1e-10 against the network's 9.1e-6 for the methylotrophic
-route, and inhibit only those. Raising the sandbox threshold to 0.92 -- above
-the model's computed water activity in every bottle -- changes modelled methane
-by under one percent.
-
-`TYPE SMOOTHSTEP` rather than `MONOD` is deliberate. Monod inhibition is
-hyperbolic and delivers at most about twentyfold across these brines at any
-half-saturation value, while the measurements fall four orders of magnitude. A
-sigmoid can express a collapse.
-
-A literal water-activity term is not reachable from a deck: `INHIBITION` reads a
-`SPECIES_NAME`, and water activity is not a species. PFLOTRAN computes it
-separately from the `H2O` primary species, which these decks constrain to
-1e-3 mol/L. Chloride is used instead, which in this model is a monotone proxy.
+The AWINHIBIT sandboxes still do not inhibit the reaction network: they add
+parallel methanogenesis pathways at a rate constant of 1e-10 against the
+network's 9.1e-6 for the methylotrophic route. Until those sandboxes carry the
+network rate laws, the comparison's salt story is the network Cl⁻ Monod only.
 
 ### Running it
 
@@ -570,13 +566,16 @@ separately from the `H2O` primary species, which these decks constrain to
 python -m pflotran_py.comparison.brines --output data/incubation_batch_composition.csv
 
 # 2. Build one closed-batch deck per measured batch.
+#    No --salinity-threshold: the fitted Cl- smoothstep is retired (see
+#    "Attributing the modelled salt suppression"). The network's own 0.2 M
+#    Cl- Monod remains.
 python -m pflotran_py.comparison.decks --output-dir decks \
-    --cellulose-hydrolysis --salinity-threshold 0.75 --salinity-interval 1.0
+    --cellulose-hydrolysis
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
 
-# 4. Build the figures.
+# 4. Build the figures (absolute moles and per-starting-C companions).
 python -m pflotran_py.comparison.figures
 ```
 
@@ -621,45 +620,90 @@ strength near 0.7 mol/L while these brines run from 1.2 to 5.8 mol/L. That is an
 extrapolation of up to eightfold, and the result would look like a measurement
 while being closer to a guess.
 
+### Starting carbon: what we have, what we plot, what we claim
+
+**Lab TOC / volatile solids were not assayed** for Exp003 / Exp004. What the
+measurement pipeline *does* carry is a recipe-derived starting carbon inventory:
+
+```text
+dry biomass (g) = incubation mass
+                × (sludge fraction × (1 − 0.732)
+                   + spirulina fraction × (1 − 0.05))
+moles starting C = dry biomass × 0.5 / 12.011 g mol⁻¹
+```
+
+(`calculate_dry_biomass_in_incubation` / `convert_dry_biomass_to_moles_C` in
+saltyBiomass). That is dry sludge (+ spirulina when present) assumed 50% C by
+mass — the same denominator the GC dashboard uses for “percent of starting
+biomass C released.” Across Exp003/Exp004 it is nearly constant at about
+**0.0565 mol C per bottle** (batch-to-batch spread only a few percent); see
+`MEASURED_INCUBATION_STARTING_CARBON_MOLES` in `comparison/carbon_inventory.py`.
+
+**The closed-batch decks match that inventory.** With `--cellulose-hydrolysis`,
+solid `Cellulose_min` uses volume fraction **0.012182** so model starting C is
+**≈ 0.0565 mol** (six carbons per glucose unit, plus 1 mM dissolved DOM1). That
+is inventory normalisation — one geometric factor, no rate constants touched —
+not a kinetics fit. An earlier default of VF 0.2 held ~0.925 mol C (~16× too
+much) and made absolute mole overlays agree with the chromatograph only by luck.
+
+`cellulose_volume_fraction_for_starting_carbon()` converts a target moles-C
+into the VF; the default is the value for 0.0565 mol. After changing VF,
+re-check control water activity and dissolved DOC under the existing
+hydrolysis-rate constraints (the rate was tuned at the old inventory).
+
+**Figures.** Absolute-mole overlays and per-starting-C companions now share the
+same matched denominator (~0.0565 mol C). Prefer the companions for yield /
+Madison-style questions; use the absolute overlays for trajectory shape and
+salt ranking.
+
+| Figure | Role |
+|---|---|
+| `*_per_starting_c.png` | Yield (mol gas / mol starting C) |
+| `methane_over_time.png`, `carbon_dioxide.png`, … | Trajectory shape and salt ranking |
+
 ### Which numbers were fitted, and which were not
 
 Read this before quoting any agreement statistic from this comparison.
 
-**Three parameters were fitted against the measurements. Everything else was
-not.**
+**One parameter is still fitted against the measurements for the carbon
+inventory. The fitted Cl⁻ smoothstep is no longer used in the comparison.**
 
-| Parameter | Value | Fitted against | How |
-|---|---|---|---|
-| Salinity inhibition threshold | 0.75 mol/L Cl⁻ | Exp004 methane | Grid search, 24 combinations |
-| Salinity inhibition interval | 1.0 decades | Exp004 methane | Same grid search |
-| Cellulose hydrolysis rate | `2.d-8` mol/m²/s | Exp004 **water activity**, not methane | Sweep of four values |
+| Parameter | Value | Fitted against | How | Status |
+|---|---|---|---|---|
+| Cellulose hydrolysis rate | `2.d-8` mol/m²/s | Exp004 **water activity**, not methane | Sweep of four values | In use |
+| Salinity inhibition threshold | 0.75 mol/L Cl⁻ | Exp004 methane | Grid search, 24 combinations | **Retired** from comparison default |
+| Salinity inhibition interval | 1.0 decades | Exp004 methane | Same grid search | **Retired** from comparison default |
 
-The first two were selected by `pflotran_py.comparison.calibrate`, which fixes
-the objective and the grid in advance, runs every combination on Exp004 alone,
-and takes the arithmetic minimum. The objective is the root mean squared error
-of log10(modelled/measured) across Exp004's seven batches.
+The smoothstep pair was selected by `pflotran_py.comparison.calibrate` on
+Exp004 alone. The inhibition diagnostic later showed it produced the modelled
+methane cliff (~850× at mid/high salt) and that the network's own 0.2 M Cl⁻
+Monod, used alone, recovers a gradual decline. Those two fitted numbers remain
+in `calibrate` / `forecast` for reproducibility of the old protocol; the
+comparison decks omit `--salinity-threshold`.
 
-The third was chosen so that the unsalted bottle's modelled water activity
-matched the meter reading of 1.000, and so that the dissolved organic pool
-landed at a concentration an active sludge porewater plausibly holds. Methane
-was not consulted. A faster rate leaves the organic pool depressing water
-activity; a slower one makes carbon supply itself the limiting factor.
+The hydrolysis rate was chosen so that the unsalted bottle's modelled water
+activity matched the meter reading of 1.000, and so that the dissolved organic
+pool landed at a concentration an active sludge porewater plausibly holds.
+Methane was not consulted. A faster rate leaves the organic pool depressing
+water activity; a slower one makes carbon supply itself the limiting factor.
 
-A fourth number, the solid carbon volume fraction of 0.2, was reasoned rather
-than fitted: it holds several times the carbon the network consumes over 130
-days, so that supply does not become an accidental limit.
+A fourth number, the solid carbon volume fraction (**0.012182**), is
+**not** a methane fit: it is set so model starting C matches the
+recipe-derived incubation inventory (~0.0565 mol C). See "Starting carbon"
+above.
 
 **Not fitted, and not adjusted at any point:** the sixteen-reaction network and
 every rate constant and half-saturation in it (see `generator/REFERENCES.md`),
 the Henry solubilities and Setschenow coefficients, all fifteen brine
 compositions (derived from the weighed recipes), the bottle geometry, the
 temperature, and the run duration. Nor are the four structural changes fits --
-sealing the domain, giving methane a gas phase, coupling carbonate, and moving
-carbon into a solid pool each correct a specific defect and introduce no free
-parameter. Each was checked against something independent: chloride retention,
-agreement between PFLOTRAN's internal methane partition and Henry's law to
-within 16 percent, mass conservation across deck versions, and the measured
-water activity of the control.
+sealing the domain, giving methane a gas phase, coupling carbonate, and matching
+the solid carbon pool to measured starting C each correct a specific defect and
+introduce no free kinetic parameter. Each was checked against something
+independent: chloride retention, agreement between PFLOTRAN's internal methane
+partition and Henry's law to within 16 percent, mass conservation across deck
+versions, the measured water activity of the control, and (for the carbon pool)
+equality with recipe-derived dry-biomass moles C.
 
 **Carbon dioxide has no fitted parameters at all.** Nothing was ever tuned
 against it. Its panel in the parity figure is a parameter-free prediction,
@@ -705,16 +749,11 @@ which it cannot.
 ### What the comparison currently shows
 
 With the domain sealed, a real methane gas phase, coupled carbonate, the carbon
-moved into a solid pool and the fitted salinity inhibition, the model spans a
-range of about 1900-fold from the unsalted bottles to the strongest brine,
-against a measured 16000-fold. Before these changes it spanned threefold. Sixty
-percent of methane conditions fall within a factor of ten of measurement.
-
-The residual error is mostly a systematic under-prediction: nearly every point
-sits below the line of equality, most of all in the unsalted controls, which is
-what hydrolysis becoming rate-limiting looks like. That is a more tractable kind
-of wrongness than the original problem, which was a missing mechanism rather
-than a miscalibrated one.
+pool matched to recipe-derived starting C (~0.0565 mol), and **only** the
+network's legacy 0.2 M Cl⁻ Monod (fitted smoothstep retired), absolute mole
+comparisons share a carbon budget with the incubations and no longer double-
+count chloride. The diagnostic `no_smoothstep` variant is what the comparison
+figures now track.
 
 The water-activity sandboxes remain disconnected from all of this. They inhibit
 their own parallel methanogenesis pathways rather than the network's, at a rate
@@ -730,6 +769,84 @@ cannot capture the non-ideality of concentrated brine: the strongest magnesium
 chloride bottle computes 0.884 against a measured 0.824. Water activity is now a
 salt-driven quantity and a usable diagnostic, but it is systematically too high
 at the salty end, and correcting that is a Fortran change.
+
+### Attributing the modelled salt suppression
+
+Modelled methane falls off a cliff between water activity 0.94 and 0.93 and then
+sits on a floor near 10⁻⁶ mol per mol starting C, while the measurements decline
+gradually across the whole range. Four things could produce that, and all four
+are currently switched on at once, so the comparison figures cannot say which:
+
+1. **A chloride Monod inhibition baked into the reaction network** at 0.2 mol/L,
+   attached to the three methanogenesis pathways *and to fermentation*. Every
+   salted batch carries at least 1.2 mol/L chloride, so `K / (K + C)` runs from
+   about a seventh to a thirtieth — and because fermentation is throttled too,
+   that suppression compounds through the carbon chain. `REFERENCES.md` records
+   the threshold as empirical, with no citation. A generated deck contains four
+   copies of this term and three of the smoothstep, which is the double count in
+   plain sight.
+2. **The fitted chloride smoothstep**, on the three methanogenesis reactions and
+   deliberately not on fermentation. It was fitted on Exp004, whose brines carry
+   no sulfate, so it had to absorb the entire salt effect of a sulfate-free
+   solution.
+3. **Sulfate competition.** Sulfate reducers outcompete methanogens for acetate
+   and hydrogen, and sulfate-dependent anaerobic methane oxidation destroys
+   methane after it is made. Both are real chemistry, and both act only on the
+   Exp003 sea-salt brines — which is how a term fitted on sulfate-free brines
+   ends up over-suppressing sea salt when carried across.
+4. **Carbon supply.** With the pool now matched to ~0.0565 mol C, hydrolysis may
+   be the binding constraint, which would flatten yield across brines for
+   reasons having nothing to do with salt.
+
+`comparison/inhibition_diagnostic.py` runs the five decks that separate these.
+It fits nothing and adds no parameter: each variant is the existing deck with
+one term switched off.
+
+| Variant | Legacy Cl⁻ Monod | Fitted smoothstep | Sulfate pathways |
+| --- | --- | --- | --- |
+| `baseline` | on | on | on |
+| `no_cl_monod` | **off** | on | on |
+| `no_smoothstep` | on | **off** | on |
+| `no_salt_terms` | off | off | on |
+| `ceiling` | off | off | **off** |
+
+Because inhibition factors multiply, each pair that differs in exactly one
+switch gives the fold change that term is responsible for, per batch. The point
+is the *shape* across water activity rather than the size anywhere: if removing
+one term turns the cliff into a gradual decline, that term produced the cliff.
+
+```bash
+bash scripts/run_inhibition_diagnostic.sh          # 75 runs, budget an hour or two
+```
+
+Or a stage at a time, which is useful because only the middle one needs Docker:
+
+```bash
+python -m pflotran_py.comparison.inhibition_diagnostic --stage decks
+python -m pflotran_py.comparison.inhibition_diagnostic --stage runs
+python -m pflotran_py.comparison.inhibition_diagnostic --stage summarise
+```
+
+Results land in `output/comparison/diagnostic/`: `per_variant.csv` (final
+methane per variant per batch), `attribution.csv` (the fold changes), and
+`inhibition_decomposition.png` (yield against water activity per variant, with
+the measurements overlaid, beside a per-batch attribution panel).
+
+The last two variants omit sulfate reduction and anaerobic methane oxidation,
+which these incubations certainly perform. They exist to bound the carbon-supply
+ceiling and are diagnostics, not predictions; nothing about them should be
+carried into a deck used for prediction. The same caution applies to the
+`--disable-reactions` flag on `comparison.decks` that makes them possible.
+
+The likely honest outcome is that one of the two chloride terms is retired and
+the survivor refitted, with Exp003 still held out — which lowers the parameter
+count rather than raising it.
+
+**Update after the diagnostic ran:** that is what happened. The fitted smoothstep
+was the cliff (~850×); sulfate competition was ~1×; carbon supply was not
+limiting. The comparison pipeline now matches the `no_smoothstep` variant
+(legacy Cl⁻ Monod only). The smoothstep remains available for attribution and
+for reproducing the old calibrate/forecast protocol.
 
 ---
 

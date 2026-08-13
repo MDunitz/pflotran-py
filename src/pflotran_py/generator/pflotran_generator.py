@@ -156,25 +156,27 @@ TRACE_SPECIES = [
 # Solid carbon pool that hydrolyses to dissolved organic matter. The mineral
 # and its reaction are already in hanford.dat; only the kinetics and the
 # starting inventory are set here.
+#
+# volume_fraction is matched to the incubations' recipe-derived starting carbon
+# (~0.0565 mol C / bottle for Exp003/Exp004; see comparison.carbon_inventory).
+# At the mineral's 162.14 cm3/mol molar volume that is VF ≈ 0.0122, not the
+# earlier 0.2 (~0.925 mol C) which over-supplied carbon by ~16×. This is
+# inventory normalisation, not a kinetics fit.
 DEFAULT_CELLULOSE_HYDROLYSIS = {
     "mineral": "Cellulose_min",
-    # Volume fraction of the bulk. At the mineral's 162.14 cm3/mol molar
-    # volume, 0.2 holds about 1.2 mol/L of bulk as glucose equivalents --
-    # several times the 0.22 mol/L the model consumed over 130 days when DOM1
-    # was an unlimited pool, so carbon supply does not become the accidental
-    # limit.
-    "volume_fraction": 0.2,
+    "volume_fraction": 0.012182,
     "surface_area": "1.0e2",
     # Chosen so that hydrolysis supplies carbon on the same timescale the
     # network consumes it, rather than instantly. This is the parameter that
     # makes hydrolysis rate-limiting, which is the point of the change.
     #
-    # Tuned by sweep. At 2.d-7 the dissolved pool still reaches 0.57 mol/L and
-    # keeps depressing water activity; at 2.d-10 carbon supply itself becomes
-    # the limit and modelled methane falls fivefold. At 2.d-8 the unsalted
-    # bottle holds 0.032 mol/L of dissolved organic matter, which is what an
-    # active sludge porewater looks like, and its water activity comes out at
-    # 0.9927 against a measured 1.000.
+    # Tuned by sweep at the previous (unmatched) inventory. At 2.d-7 the
+    # dissolved pool still reaches 0.57 mol/L and keeps depressing water
+    # activity; at 2.d-10 carbon supply itself becomes the limit and modelled
+    # methane falls fivefold. At 2.d-8 the unsalted bottle holds 0.032 mol/L
+    # of dissolved organic matter, which is what an active sludge porewater
+    # looks like, and its water activity comes out at 0.9927 against a
+    # measured 1.000. Re-check a_w and DOC after changing volume_fraction.
     "rate_constant": "2.d-8",
     # What remains dissolved. Millimolar rather than molar, which is what
     # sludge porewater dissolved organic carbon actually looks like.
@@ -330,13 +332,33 @@ class PFLOTRANGenerator:
         # Setting this switches the carbon into a solid Cellulose_min pool that
         # dissolves to DOM1 kinetically, leaving only a small dissolved pool.
         # The database already carries the reaction (Cellulose_min -> 1 DOM1),
-        # so this adds no new chemistry. Pass a dict to override any of::
+        # so this adds no new chemistry. The default volume fraction matches
+        # Exp003/Exp004 recipe-derived starting C (~0.0565 mol); pass a dict
+        # to override any of::
         #
-        #     {"volume_fraction": 0.2, "surface_area": "1.0e2",
-        #      "rate_constant": "2.d-7", "dom1_initial": "1.00d-03 T"}
+        #     {"volume_fraction": 0.012182, "surface_area": "1.0e2",
+        #      "rate_constant": "2.d-8", "dom1_initial": "1.00d-03 T"}
         #
         # Defaults to None, leaving the carbon inventory as it was.
         cellulose_hydrolysis=None,
+        # --- Reactions to leave out of the deck ---
+        # Rate keys naming reactions to omit, e.g.
+        #
+        #     {"sulfate_reduction", "methane_so4_oxidation"}
+        #
+        # This exists for mechanism-attribution runs. Sulfate reducers compete
+        # with methanogens for acetate and hydrogen, and sulfate-dependent
+        # anaerobic methane oxidation consumes methane after it is made, so a
+        # sulfate-bearing brine is suppressed by those pathways in addition to
+        # any salinity inhibition. Dropping them isolates how much of the
+        # modelled suppression is competition rather than salt stress.
+        #
+        # A deck built this way is a diagnostic, not a physical model: sulfate
+        # reduction is real chemistry that these incubations undoubtedly do.
+        # Nothing here should be carried into a deck used for prediction.
+        #
+        # Defaults to None, including every reaction.
+        disabled_rate_keys=None,
         # --- Paths ---
         database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
@@ -361,6 +383,13 @@ class PFLOTRANGenerator:
         # Inhibition mechanism toggles
         self.enable_cl_inhibition = enable_cl_inhibition
         self.enable_aw_sandbox = enable_aw_sandbox
+        self.disabled_rate_keys = frozenset(disabled_rate_keys or ())
+        unknown = self.disabled_rate_keys - set(self.rate_constants)
+        if unknown:
+            raise ValueError(
+                f"Unknown rate key(s) in disabled_rate_keys: {sorted(unknown)}. "
+                f"Known keys: {sorted(self.rate_constants)}"
+            )
 
         # Chemistry configuration
         self.couple_carbonate = couple_carbonate
@@ -418,9 +447,9 @@ class PFLOTRANGenerator:
         """Whether a reaction from the network belongs in this deck.
 
         A seam for subclasses that model a different physical system. The base
-        generator includes every reaction.
+        generator includes everything except what ``disabled_rate_keys`` names.
         """
-        return True
+        return rxn.get("rate_key") not in self.disabled_rate_keys
 
     def _build_constraint_cellulose(self):
         """Initial solid carbon inventory line for the constraint block."""
@@ -576,6 +605,8 @@ class PFLOTRANGenerator:
                 continue
             blocks.append(self._build_microbial_reaction(rxn))
         for rxn in GENERAL_REACTIONS:
+            if not self._include_reaction(rxn):
+                continue
             blocks.append(self._build_general_reaction(rxn))
         return "\n\n".join(blocks)
 
@@ -820,6 +851,8 @@ END_SUBSURFACE"""
         print(f"  a_w threshold: {self.aw_threshold}")
         print(f"  Cl⁻ inhibition: {'ON' if self.enable_cl_inhibition else 'OFF'}")
         print(f"  a_w sandbox: {'ON' if self.enable_aw_sandbox else 'OFF'}")
+        if self.disabled_rate_keys:
+            print(f"  Reactions omitted: {', '.join(sorted(self.disabled_rate_keys))}")
         return filename
 
 
