@@ -250,9 +250,12 @@ class PFLOTRANGenerator:
         # --- Reaction sandbox: water activity inhibition ---
         # ONE_MINUS_AW maps rate to max(0,(a_w - a_crit)/(1 - a_crit)), a
         # continuous osmoregulation-style factor across the measured a_w
-        # range. a_crit = 0.80 sits just below the driest bottle (0.824) so
-        # nothing is forced to a hard numerical floor; not a methane fit.
+        # range. a_crit defaults differ by pathway (acetoclastic most
+        # salt-sensitive): see aw_threshold_acetate / _methyl. The shared
+        # aw_threshold is the hydrogenotrophic floor and the fallback.
         aw_threshold=0.80,
+        aw_threshold_acetate=0.90,
+        aw_threshold_methyl=0.85,
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
         aw_inhibition_type="ONE_MINUS_AW",
         # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
@@ -388,6 +391,13 @@ class PFLOTRANGenerator:
 
         # Water activity sandbox parameters
         self.aw_threshold = aw_threshold
+        # Pathway-specific a_crit overrides; None means "use aw_threshold".
+        self.aw_threshold_acetate = (
+            aw_threshold if aw_threshold_acetate is None else aw_threshold_acetate
+        )
+        self.aw_threshold_methyl = (
+            aw_threshold if aw_threshold_methyl is None else aw_threshold_methyl
+        )
         self.aw_rate_constant = aw_rate_constant
         self.aw_inhibition_type = aw_inhibition_type
         self.fixed_water_activity = fixed_water_activity
@@ -647,9 +657,10 @@ class PFLOTRANGenerator:
           AWINHIBITMETHYL  — methylotrophic
 
         Rate constants and half-saturations are taken from the same defaults
-        as the network reactions. Water-activity threshold and inhibition
-        mode (ONE_MINUS_AW / SMOOTHSTEP / THRESHOLD) come from
-        ``aw_threshold`` / ``aw_inhibition_type``.
+        as the network reactions. Inhibition mode comes from
+        ``aw_inhibition_type``. Per-pathway ``WATER_ACTIVITY_THRESHOLD``
+        values follow acetoclastic > methylotrophic > hydrogenotrophic
+        salt sensitivity (literature ordering; not a methane fit).
         """
         general = self.thresholds["general"]
         o2_inh = self.thresholds["o2_inhibition"]
@@ -658,6 +669,7 @@ class PFLOTRANGenerator:
             {
                 "name": "AWINHIBIT",
                 "rate_key": "hydrogenotrophic_methano",
+                "aw_threshold": self.aw_threshold,
                 "extra": [
                     f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
                     f"    HALF_SATURATION_HCO3 {self._get_ks('hco3'):.2e}",
@@ -671,6 +683,7 @@ class PFLOTRANGenerator:
             {
                 "name": "AWINHIBITACETATE",
                 "rate_key": "acetaclastic_methano",
+                "aw_threshold": self.aw_threshold_acetate,
                 "extra": [
                     f"    HALF_SATURATION_ACETATE {self._get_ks('acetate'):.2e}",
                     f"    THRESHOLD_ACETATE {general:.2e}",
@@ -685,6 +698,7 @@ class PFLOTRANGenerator:
             {
                 "name": "AWINHIBITMETHYL",
                 "rate_key": "methylotrophic_methano",
+                "aw_threshold": self.aw_threshold_methyl,
                 "extra": [
                     f"    HALF_SATURATION_CH3OH {self._get_ks('ch3oh'):.2e}",
                     f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
@@ -699,7 +713,9 @@ class PFLOTRANGenerator:
         for spec in specs:
             rate = self.rate_constants[spec["rate_key"]]
             lines.append(f"  {spec['name']}")
-            lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.4f}")
+            lines.append(
+                f"    WATER_ACTIVITY_THRESHOLD {float(spec['aw_threshold']):.4f}"
+            )
             if self.fixed_water_activity is not None:
                 lines.append(
                     f"    FIXED_WATER_ACTIVITY {float(self.fixed_water_activity):.6f}"

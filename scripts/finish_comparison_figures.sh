@@ -19,7 +19,8 @@ echo "==> Generating decks (cellulose; a_w sandboxes; no Cl- Monod)"
 rm -rf decks
 python -m pflotran_py.comparison.decks --output-dir decks \
   --cellulose-hydrolysis --no-cl-inhibition \
-  --aw-inhibition-type ONE_MINUS_AW --aw-threshold 0.80
+  --aw-inhibition-type ONE_MINUS_AW \
+  --aw-threshold 0.80 --aw-threshold-methyl 0.85 --aw-threshold-acetate 0.90
 
 echo "==> Running 15 closed-batch decks in Docker"
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
