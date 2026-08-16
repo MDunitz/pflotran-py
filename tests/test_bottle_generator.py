@@ -23,7 +23,6 @@ from pflotran_py.generator.bottle_generator import (
     nacl_molality_for_water_activity,
     water_activity_from_nacl_molality,
 )
-from pflotran_py.generator.constants import AW_CRIT_HYDROGENOTROPHIC
 
 
 @pytest.fixture
@@ -94,7 +93,7 @@ def test_sandbox_rates_match_the_network_defaults(deck):
     assert "RATE_CONSTANT 7.20e-09" in deck  # hydrogenotrophic
     assert "RATE_CONSTANT 1.50e-08" in deck  # acetoclastic
     assert "RATE_CONSTANT 9.10e-06" in deck  # methylotrophic
-    assert f"WATER_ACTIVITY_THRESHOLD {AW_CRIT_HYDROGENOTROPHIC:.4f}" in deck
+    assert "WATER_ACTIVITY_THRESHOLD 0.9100" in deck
 
 
 # ─────────────────────────────────────────────────────────────────────
