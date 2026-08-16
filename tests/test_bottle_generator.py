@@ -81,7 +81,7 @@ def test_deck_keeps_the_reaction_network(deck):
     assert "MICROBIAL_REACTION" in deck
     assert "ACTIVITY_WATER" in deck
     assert "HALF_SATURATION_H2" in deck
-    assert "INHIBITION_TYPE SMOOTHSTEP" in deck
+    assert "INHIBITION_TYPE ONE_MINUS_AW" in deck
     # Network methanogenesis is omitted -- the sandboxes own those pathways.
     assert "# hydrogenotrophic methanogenesis" not in deck
     assert "# acetoclastic methanogenesis" not in deck
@@ -93,7 +93,7 @@ def test_sandbox_rates_match_the_network_defaults(deck):
     assert "RATE_CONSTANT 7.20e-09" in deck  # hydrogenotrophic
     assert "RATE_CONSTANT 1.50e-08" in deck  # acetoclastic
     assert "RATE_CONSTANT 9.10e-06" in deck  # methylotrophic
-    assert "WATER_ACTIVITY_THRESHOLD 0.9500" in deck
+    assert "WATER_ACTIVITY_THRESHOLD 0.8000" in deck
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -240,11 +240,11 @@ def test_series_decks_differ_only_in_salt(tmp_path):
 def test_salinity_inhibition_is_off_by_default(deck):
     """Cl- smoothstep on the network is off unless asked for.
 
-    The a_w sandboxes still use INHIBITION_TYPE SMOOTHSTEP; that is a different
-    term. The Cl- one is the one that writes SMOOTHSTEP_INTERVAL.
+    The a_w sandboxes use INHIBITION_TYPE ONE_MINUS_AW by default; that is a
+    different term. The Cl- one is the one that writes SMOOTHSTEP_INTERVAL.
     """
     assert "SMOOTHSTEP_INTERVAL" not in deck
-    assert "INHIBITION_TYPE SMOOTHSTEP" in deck
+    assert "INHIBITION_TYPE ONE_MINUS_AW" in deck
 
 
 def _salted_deck(tmp_path, **spec):
@@ -267,8 +267,9 @@ def _salted_deck(tmp_path, **spec):
 def test_salinity_inhibition_lands_on_the_methanogenesis_reactions(tmp_path):
     """Three reactions produce methane, and the term has to be on all three."""
     deck = _salted_deck(tmp_path)
-    # Sandbox SMOOTHSTEP (a_w) plus three Cl- smoothsteps on methanogenesis.
-    assert deck.count("TYPE SMOOTHSTEP") >= 3
+    # Three Cl- smoothsteps on network methanogenesis (a_w sandboxes are
+    # ONE_MINUS_AW and do not emit TYPE SMOOTHSTEP).
+    assert deck.count("TYPE SMOOTHSTEP") == 3
     assert deck.count("SMOOTHSTEP_INTERVAL 0.50") == 3
 
 
