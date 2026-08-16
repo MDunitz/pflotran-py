@@ -327,6 +327,12 @@ def main():
         # near pH 7.5 (Ki = 3.16e-8) matches the upper edge of the usual
         # acetoclast optimum without fitting methane.
         extra["thresholds"] = {"h_plus_inhibition_3": 3.16e-8}
+        # Acetate half-saturation in the inherited network is 40 mM, far above
+        # literature acetoclastic Ks (typically ~0.2-5 mM). After raising
+        # hydrolysis, controls bank ~80 mM acetate. Use 2 mM (within the
+        # literature range) so acetoclasts can draw the pool down on the
+        # incubation timescale — a kinetics correction, not a methane fit.
+        extra["half_saturation"] = {"acetate": 2.0e-3}
     if args.salinity_threshold is not None:
         extra["salinity_inhibition"] = {
             "species": "Cl-",

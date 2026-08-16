@@ -588,7 +588,9 @@ sensitivity checks. With `--cellulose-hydrolysis`, the acetoclastic
 `H+_below` Monod Ki is also moved from 2.88×10⁻⁷ (half at pH ~6.5) to
 3.16×10⁻⁸ (half at pH ~7.5), matching the upper edge of the usual acetoclast
 optimum — otherwise bottle controls that drift to pH ~7.9 bank acetate and
-starve methane. Rebuild the container after pulling sandbox Fortran
+starve methane. The same cellulose decks use an acetate half-saturation of
+2 mM (literature acetoclast range; the network default is 40 mM) so banked
+acetate can be drawn down after the faster hydrolysis step. Rebuild the container after pulling sandbox Fortran
 changes.
 
 ### Running it
@@ -703,7 +705,7 @@ inventory. The fitted Cl⁻ smoothstep is no longer used in the comparison.**
 
 | Parameter | Value | Fitted against | How | Status |
 |---|---|---|---|---|
-| Cellulose hydrolysis rate | `2.d-8` mol/m²/s | Exp004 **water activity**, not methane | Sweep of four values | In use |
+| Cellulose hydrolysis rate | `2.d-7` mol/m²/s | matched-inventory a_w / DOC check | 10× step from the old `2.d-8` DOC compromise | In use |
 | Salinity inhibition threshold | 0.75 mol/L Cl⁻ | Exp004 methane | Grid search, 24 combinations | **Retired** from comparison default |
 | Salinity inhibition interval | 1.0 decades | Exp004 methane | Same grid search | **Retired** from comparison default |
 
@@ -714,20 +716,23 @@ Monod, used alone, recovers a gradual decline. Those two fitted numbers remain
 in `calibrate` / `forecast` for reproducibility of the old protocol; the
 comparison decks omit `--salinity-threshold`.
 
-The hydrolysis rate was chosen so that the unsalted bottle's modelled water
-activity matched the meter reading of 1.000, and so that the dissolved organic
-pool landed at a concentration an active sludge porewater plausibly holds.
-Methane was not consulted. A faster rate leaves the organic pool depressing
-water activity; a slower one makes carbon supply itself the limiting factor.
+The hydrolysis rate was originally `2.d-8`, chosen at the unmatched VF~0.2
+inventory so the unsalted bottle's modelled water activity matched the meter
+reading of 1.000. At the matched ~0.0565 mol C inventory that rate left most
+of the solid pool unhydrolyzed at 130 d. The comparison default is now
+`2.d-7`; re-check control a_w and DOC after every further change. Methane
+was not consulted for either choice.
 
 A fourth number, the solid carbon volume fraction (**0.012182**), is
 **not** a methane fit: it is set so model starting C matches the
 recipe-derived incubation inventory (~0.0565 mol C). See "Starting carbon"
 above.
 
-**Not fitted, and not adjusted at any point:** the sixteen-reaction network and
-every rate constant and half-saturation in it (see `generator/REFERENCES.md`),
-the Henry solubilities and Setschenow coefficients, all fifteen brine
+**Not fitted against methane:** the sixteen-reaction network and its rate
+constants (see `generator/REFERENCES.md`). Bottle cellulose decks do override
+the acetoclastic acetate half-saturation (40 mM → 2 mM, literature range) and
+the H⁺_below Ki as documented above. Also unchanged: the Henry solubilities
+and Setschenow coefficients, all fifteen brine
 compositions (derived from the weighed recipes), the bottle geometry, the
 temperature, and the run duration. Nor are the four structural changes fits --
 sealing the domain, giving methane a gas phase, coupling carbonate, and matching
