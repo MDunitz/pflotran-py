@@ -337,7 +337,7 @@ def test_hydrolysis_declares_the_mineral_everywhere_it_is_needed(tmp_path):
     the constraint, or PFLOTRAN either ignores it or refuses the deck."""
     deck = _hydrolysis_deck(tmp_path)
     assert deck.count("Cellulose_min") >= 3
-    assert "RATE_CONSTANT  2.d-8 mol/m^2-sec" in deck
+    assert "RATE_CONSTANT  2.d-7 mol/m^2-sec" in deck
 
 
 def test_hydrolysis_rate_is_overridable(tmp_path):

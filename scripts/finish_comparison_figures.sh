@@ -20,7 +20,8 @@ rm -rf decks
 python -m pflotran_py.comparison.decks --output-dir decks \
   --cellulose-hydrolysis --no-cl-inhibition \
   --aw-inhibition-type ONE_MINUS_AW \
-  --aw-threshold 0.80 --aw-threshold-methyl 0.85 --aw-threshold-acetate 0.90
+  --aw-threshold 0.91 --aw-threshold-methyl 0.91 --aw-threshold-acetate 0.92 \
+  --aw-upstream-inhibition --aw-threshold-fermentation 0.90 --aw-threshold-hydrolysis 0.85
 
 echo "==> Running 15 closed-batch decks in Docker"
 python -m pflotran_py.comparison.run_decks --run-root runs --clean

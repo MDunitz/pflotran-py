@@ -75,6 +75,8 @@ def colour_for_brine(brine_name):
         family = "nacl"
     elif name.startswith("Mg_"):
         family = "mgcl2"
+    elif name.startswith("SWSu"):
+        family = "seasalt_su"
     elif name.startswith("SW"):
         family = "seasalt"
     else:

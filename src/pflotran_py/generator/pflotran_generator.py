@@ -166,18 +166,14 @@ DEFAULT_CELLULOSE_HYDROLYSIS = {
     "mineral": "Cellulose_min",
     "volume_fraction": 0.012182,
     "surface_area": "1.0e2",
-    # Chosen so that hydrolysis supplies carbon on the same timescale the
-    # network consumes it, rather than instantly. This is the parameter that
-    # makes hydrolysis rate-limiting, which is the point of the change.
-    #
-    # Tuned by sweep at the previous (unmatched) inventory. At 2.d-7 the
-    # dissolved pool still reaches 0.57 mol/L and keeps depressing water
-    # activity; at 2.d-10 carbon supply itself becomes the limit and modelled
-    # methane falls fivefold. At 2.d-8 the unsalted bottle holds 0.032 mol/L
-    # of dissolved organic matter, which is what an active sludge porewater
-    # looks like, and its water activity comes out at 0.9927 against a
-    # measured 1.000. Re-check a_w and DOC after changing volume_fraction.
-    "rate_constant": "2.d-8",
+    # Mineral kinetic rate [mol/m^2-sec]. With the matched ~0.0565 mol C
+    # inventory (VF 0.012182), 2.d-8 left ~70% of cellulose unhydrolyzed at
+    # 130 d and starved headspace CO2/CH4. The earlier 2.d-8 choice was a
+    # DOC/a_w compromise at the *old* VF~0.2 inventory, where 2.d-7 drove
+    # DOM1 to ~0.57 M. At the matched inventory the solid pool is ~16x
+    # smaller, so 2.d-7 is the literature-leaning step that still needs a
+    # control a_w / DOC check after every change.
+    "rate_constant": "2.d-7",
     # What remains dissolved. Millimolar rather than molar, which is what
     # sludge porewater dissolved organic carbon actually looks like.
     "dom1_initial": "1.00d-03 T",
@@ -253,9 +249,9 @@ class PFLOTRANGenerator:
         # range. a_crit defaults differ by pathway (acetoclastic most
         # salt-sensitive): see aw_threshold_acetate / _methyl. The shared
         # aw_threshold is the hydrogenotrophic floor and the fallback.
-        aw_threshold=0.80,
-        aw_threshold_acetate=0.90,
-        aw_threshold_methyl=0.85,
+        aw_threshold=0.91,
+        aw_threshold_acetate=0.92,
+        aw_threshold_methyl=0.91,
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
         aw_inhibition_type="ONE_MINUS_AW",
         # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult

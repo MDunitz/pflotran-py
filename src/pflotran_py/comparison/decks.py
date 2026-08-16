@@ -33,9 +33,70 @@ import pandas as pd
 
 from ..geochem.water_activity import pitzer_water_activity_from_batch
 from ..generator.bottle_generator import BOTTLE_FINAL_TIME_DAYS, BottleGenerator
+from ..generator.pflotran_generator import (
+    DEFAULT_CELLULOSE_HYDROLYSIS,
+    DEFAULT_RATE_CONSTANTS,
+)
 from .brines import to_pflotran_constraints
 
 logger = logging.getLogger(__name__)
+
+
+def one_minus_aw_factor(water_activity, a_crit):
+    """Same continuous factor the AWINHIBIT sandboxes use: max(0,(a_w-a_crit)/(1-a_crit))."""
+    a_w = float(water_activity)
+    crit = float(a_crit)
+    if crit >= 1.0:
+        return 1.0
+    if a_w <= crit:
+        return 0.0
+    return (a_w - crit) / (1.0 - crit)
+
+
+def _fortran_float(value):
+    """Parse a PFLOTRAN-style float string such as ``2.d-7``."""
+    return float(str(value).strip().lower().replace("d", "e"))
+
+
+def _to_fortran_rate(value):
+    """Emit a PFLOTRAN-friendly scientific literal."""
+    return f"{float(value):.1e}".replace("e", "d")
+
+
+def _apply_aw_upstream_inhibition(kwargs):
+    """Scale fermentation and cellulose hydrolysis by ONE_MINUS_AW on fixed a_w.
+
+    Closed-batch decks pass a constant FIXED_WATER_ACTIVITY, so multiplying the
+    upstream rate constants by the same factor the methanogenesis sandboxes use
+    is equivalent to inhibiting those steps with a_w -- without a new Fortran
+    sandbox. Controls (a_w = 1) are unchanged.
+    """
+    fixed = kwargs.get("fixed_water_activity")
+    if fixed is None:
+        return kwargs
+
+    ferment_crit = kwargs.pop("aw_threshold_fermentation", 0.90)
+    hydro_crit = kwargs.pop("aw_threshold_hydrolysis", 0.85)
+    f_ferment = one_minus_aw_factor(fixed, ferment_crit)
+    f_hydro = one_minus_aw_factor(fixed, hydro_crit)
+
+    rates = dict(kwargs.get("rate_constants") or {})
+    base_ferment = rates.get(
+        "fermentation", DEFAULT_RATE_CONSTANTS["fermentation"]
+    )
+    rates["fermentation"] = base_ferment * f_ferment
+    kwargs["rate_constants"] = rates
+
+    if kwargs.get("cellulose_hydrolysis") is not None:
+        hydro = {
+            **DEFAULT_CELLULOSE_HYDROLYSIS,
+            **dict(kwargs["cellulose_hydrolysis"]),
+        }
+        base_hydro = _fortran_float(hydro["rate_constant"])
+        hydro["rate_constant"] = _to_fortran_rate(base_hydro * f_hydro)
+        kwargs["cellulose_hydrolysis"] = hydro
+
+    return kwargs
 
 
 def deck_filename(batch_row):
@@ -88,6 +149,14 @@ def generate_deck_for_batch(
                 f"Unknown water_activity_source {source!r}; "
                 "expected 'pitzer', 'measured', or 'pflotran'"
             )
+
+    aw_upstream = kwargs.pop("aw_upstream_inhibition", False)
+    if not aw_upstream:
+        kwargs.pop("aw_threshold_fermentation", None)
+        kwargs.pop("aw_threshold_hydrolysis", None)
+    else:
+        kwargs = _apply_aw_upstream_inhibition(kwargs)
+
     pitzer_aw = kwargs.get("fixed_water_activity")
     if pitzer_aw is not None:
         label = (
@@ -173,7 +242,7 @@ def main():
     parser.add_argument(
         "--aw-threshold",
         type=float,
-        default=0.80,
+        default=0.91,
         help=(
             "Critical water activity for hydrogenotrophic methanogenesis "
             "(and the fallback if pathway-specific flags are omitted). With "
@@ -183,19 +252,19 @@ def main():
     parser.add_argument(
         "--aw-threshold-acetate",
         type=float,
-        default=0.90,
+        default=0.92,
         help=(
-            "a_crit for acetoclastic methanogenesis. Default 0.90 (most "
+            "a_crit for acetoclastic methanogenesis. Default 0.92 (most "
             "salt-sensitive of the three); literature ordering, not a fit."
         ),
     )
     parser.add_argument(
         "--aw-threshold-methyl",
         type=float,
-        default=0.85,
+        default=0.91,
         help=(
-            "a_crit for methylotrophic methanogenesis. Default 0.85 "
-            "(between acetoclastic and hydrogenotrophic)."
+            "a_crit for methylotrophic methanogenesis. Default 0.91 "
+            "(with hydrogenotrophic; acetoclastic is higher)."
         ),
     )
     parser.add_argument(
@@ -206,6 +275,27 @@ def main():
             "Shape of the a_w rate factor. ONE_MINUS_AW is continuous in "
             "(1-a_w); SMOOTHSTEP is a log10 logistic (interval 0.20)."
         ),
+    )
+    parser.add_argument(
+        "--aw-upstream-inhibition",
+        action="store_true",
+        help=(
+            "Also scale fermentation and cellulose hydrolysis by ONE_MINUS_AW "
+            "on each batch's fixed a_w (default a_crit 0.85). Osmotic stress "
+            "hits the whole cascade, not only methanogens."
+        ),
+    )
+    parser.add_argument(
+        "--aw-threshold-fermentation",
+        type=float,
+        default=0.90,
+        help="a_crit for upstream fermentation rate scaling (with --aw-upstream-inhibition).",
+    )
+    parser.add_argument(
+        "--aw-threshold-hydrolysis",
+        type=float,
+        default=0.85,
+        help="a_crit for cellulose hydrolysis rate scaling (with --aw-upstream-inhibition).",
     )
     parser.add_argument(
         "--experiments",
@@ -295,6 +385,14 @@ def main():
         # near pH 7.5 (Ki = 3.16e-8) matches the upper edge of the usual
         # acetoclast optimum without fitting methane.
         extra["thresholds"] = {"h_plus_inhibition_3": 3.16e-8}
+        # Acetate half-saturation in the inherited network is 40 mM, far above
+        # literature acetoclastic Ks (typically ~0.2-5 mM). After raising
+        # hydrolysis, controls bank ~80 mM acetate. Use 2 mM (within the
+        # Methanosaeta/Methanosarcina range) so Monod stays near saturation
+        # while the pool is drawn down; not a methane-endpoint fit. Keep the
+        # network acetoclastic rate constant (1.5e-8); a 3x rate lift overshot
+        # control CH4.
+        extra["half_saturation"] = {"acetate": 2.0e-3}
     if args.salinity_threshold is not None:
         extra["salinity_inhibition"] = {
             "species": "Cl-",
@@ -313,6 +411,10 @@ def main():
         extra["water_activity_source"] = "pflotran"
     elif args.use_measured_aw:
         extra["water_activity_source"] = "measured"
+    if args.aw_upstream_inhibition:
+        extra["aw_upstream_inhibition"] = True
+        extra["aw_threshold_fermentation"] = args.aw_threshold_fermentation
+        extra["aw_threshold_hydrolysis"] = args.aw_threshold_hydrolysis
 
     if os.path.exists(args.composition):
         table = pd.read_csv(args.composition)

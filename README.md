@@ -560,15 +560,19 @@ inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
 and `--aw-inhibition-type ONE_MINUS_AW` with pathway-specific
-`a_crit` (hydrogenotrophic 0.80, methylotrophic 0.85, acetoclastic 0.90 —
-acetoclasts fail first under salt; literature ordering, not a methane fit),
-and pass each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
+`a_crit` (hydrogenotrophic/methylotrophic 0.91, acetoclastic 0.92),
+plus `--aw-upstream-inhibition` so fermentation and cellulose hydrolysis
+are scaled by the same ONE_MINUS_AW factor on each batch's fixed a_w
+(defaults: fermentation 0.90, hydrolysis 0.85). Also pass
+each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
 so inhibition is not keyed on PFLOTRAN's ideal Raoult estimate (which is too
 high for Mg brines). With `--cellulose-hydrolysis`, the acetoclastic
 `H+_below` Monod Ki is also moved from 2.88×10⁻⁷ (half at pH ~6.5) to
 3.16×10⁻⁸ (half at pH ~7.5), matching the upper edge of the usual acetoclast
 optimum — otherwise bottle controls that drift to pH ~7.9 bank acetate and
-starve methane. Rebuild the container after pulling sandbox Fortran
+starve methane. The same cellulose decks use an acetate half-saturation of
+2 mM (literature acetoclast range; the network default is 40 mM) so banked
+acetate can be drawn down after the faster hydrolysis step. Rebuild the container after pulling sandbox Fortran
 changes.
 
 ### Running it
@@ -583,7 +587,8 @@ python -m pflotran_py.comparison.brines --output data/incubation_batch_compositi
 python -m pflotran_py.comparison.decks --output-dir decks \
     --cellulose-hydrolysis --no-cl-inhibition \
     --aw-inhibition-type ONE_MINUS_AW \
-    --aw-threshold 0.80 --aw-threshold-methyl 0.85 --aw-threshold-acetate 0.90
+    --aw-threshold 0.91 --aw-threshold-methyl 0.91 --aw-threshold-acetate 0.92 \
+    --aw-upstream-inhibition --aw-threshold-fermentation 0.90 --aw-threshold-hydrolysis 0.85
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
@@ -683,7 +688,7 @@ inventory. The fitted Cl⁻ smoothstep is no longer used in the comparison.**
 
 | Parameter | Value | Fitted against | How | Status |
 |---|---|---|---|---|
-| Cellulose hydrolysis rate | `2.d-8` mol/m²/s | Exp004 **water activity**, not methane | Sweep of four values | In use |
+| Cellulose hydrolysis rate | `2.d-7` mol/m²/s | matched-inventory a_w / DOC check | 10× step from the old `2.d-8` DOC compromise | In use |
 | Salinity inhibition threshold | 0.75 mol/L Cl⁻ | Exp004 methane | Grid search, 24 combinations | **Retired** from comparison default |
 | Salinity inhibition interval | 1.0 decades | Exp004 methane | Same grid search | **Retired** from comparison default |
 
@@ -694,11 +699,12 @@ Monod, used alone, recovers a gradual decline. Those two fitted numbers remain
 in `calibrate` / `forecast` for reproducibility of the old protocol; the
 comparison decks omit `--salinity-threshold`.
 
-The hydrolysis rate was chosen so that the unsalted bottle's modelled water
-activity matched the meter reading of 1.000, and so that the dissolved organic
-pool landed at a concentration an active sludge porewater plausibly holds.
-Methane was not consulted. A faster rate leaves the organic pool depressing
-water activity; a slower one makes carbon supply itself the limiting factor.
+The hydrolysis rate was originally `2.d-8`, chosen at the unmatched VF~0.2
+inventory so modelled control a_w stayed near 1.000 and DOM stayed
+sludge-like. With starting C matched (~0.0565 mol, VF 0.012182), that rate
+left ~70% of cellulose unhydrolyzed at 130 d and starved headspace CO₂/CH₄.
+The comparison default is now `2.d-7`; re-check control a_w and DOC after
+any further change. Methane is still not the fitting target.
 
 A fourth number, the solid carbon volume fraction (**0.012182**), is
 **not** a methane fit: it is set so model starting C matches the
