@@ -1,3 +1,17 @@
+from .constants import (
+    AW_CRIT_ACETOCLASTIC,
+    AW_CRIT_HYDROGENOTROPHIC,
+    AW_CRIT_METHYLOTROPHIC,
+    AW_INHIBITION_TYPE,
+    AW_THRESHOLD,
+)
 from .pflotran_generator import PFLOTRANGenerator
 
-__all__ = ["PFLOTRANGenerator"]
+__all__ = [
+    "PFLOTRANGenerator",
+    "AW_CRIT_ACETOCLASTIC",
+    "AW_CRIT_HYDROGENOTROPHIC",
+    "AW_CRIT_METHYLOTROPHIC",
+    "AW_INHIBITION_TYPE",
+    "AW_THRESHOLD",
+]

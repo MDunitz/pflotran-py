@@ -560,8 +560,9 @@ inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
 and `--aw-inhibition-type ONE_MINUS_AW` with pathway-specific
-`a_crit` (hydrogenotrophic 0.80, methylotrophic 0.85, acetoclastic 0.90 —
-acetoclasts fail first under salt; literature ordering, not a methane fit),
+`a_crit` from `pflotran_py.generator.constants` (hydrogenotrophic 0.80,
+methylotrophic 0.85, acetoclastic 0.90 — acetoclasts fail first under salt;
+Oren 1999/2011, not a methane fit),
 and pass each batch's **meter-read** water activity as
 `FIXED_WATER_ACTIVITY`. PHREEQC/`pitzer.dat` a_w computed from the weighed
 recipe is an independent oracle, not the default inhibition input: it is

@@ -75,6 +75,7 @@ Sources:
 import math
 import os
 
+from .constants import AW_CRIT_HYDROGENOTROPHIC
 from .pflotran_generator import PFLOTRANGenerator
 
 # ═════════════════════════════════════════════════════════════════════
@@ -831,8 +832,11 @@ def main():
     parser.add_argument(
         "--aw-threshold",
         type=float,
-        default=0.5,
-        help="Water activity below which the sandboxes inhibit methanogenesis.",
+        default=AW_CRIT_HYDROGENOTROPHIC,
+        help=(
+            "Water activity below which the sandboxes inhibit methanogenesis. "
+            f"Default {AW_CRIT_HYDROGENOTROPHIC} from generator.constants."
+        ),
     )
     args = parser.parse_args()
 
