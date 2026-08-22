@@ -15,9 +15,13 @@ over-concentrates a multi-molar brine (a 1.94 M MgCl2 batch lands at I ~= 7.1
 mol/kg instead of ~= 5.8, dropping a_w from ~0.84 to ~0.80). Supplying molality
 directly keeps the density estimate explicit and salt-loading aware.
 
-Water activity is set by the salt ions; H+/OH- at any physical brine pH are
-negligible against a multi-molar background, so the PHREEQC input carries no pH
-(PHREEQC's neutral default is used) and no carbonate system.
+pH
+--
+The solution pH is passed to PHREEQC explicitly (``DEFAULT_PH`` when the caller
+gives none). Water activity is governed by the salt ions; H+/OH- at any physical
+brine pH are negligible against a multi-molar background, so a_w is effectively
+pH-independent over the realistic range here. pH is exposed so it stays visible
+and so this path can carry a pH-sensitive system (e.g. carbonate) later.
 
 Validation (pitzer.dat, 25 degC):
     NaCl 6.14 mol/kg  -> a_w = 0.7524  (accepted 0.753)
@@ -44,11 +48,14 @@ _MOLAL = u.mol / u.kg
 
 # pitzer.dat is calibrated at 25 degC; temperature dependence is not modelled.
 TEMPERATURE_C = 25.0
+# Neutral default; a_w is pH-inert for these salt-dominated brines.
+DEFAULT_PH = 7.0
 
 _PHREEQC_INPUT_TEMPLATE = """
 SOLUTION 1
     units {units}
     temp {temp}
+    pH {ph}
     {ion_lines}
 SELECTED_OUTPUT
     -reset false
@@ -87,12 +94,12 @@ def ionic_strength(molal):
     return 0.5 * sum(m * ION_CHARGE[ion] ** 2 for ion, m in molal.items())
 
 
-def _water_activity_from_phreeqc(amounts, units):
+def _water_activity_from_phreeqc(amounts, units, ph):
     """Run PHREEQC (pitzer.dat) on a composition and return ACT("H2O").
 
     ``amounts`` maps internal ion label -> concentration (plain float) on the
-    scale named by ``units`` ("mol/kgw" or "mol/l"). Returns 1.0 for a
-    salt-free composition (pure water).
+    scale named by ``units`` ("mol/kgw" or "mol/l"); ``ph`` is the SOLUTION pH.
+    Returns 1.0 for a salt-free composition (pure water).
     """
     ion_lines = "\n    ".join(
         f"{PITZER_TO_PHREEQC_ELEMENT[ion]} {value}"
@@ -102,7 +109,7 @@ def _water_activity_from_phreeqc(amounts, units):
     if not ion_lines:
         return 1.0
     deck = _PHREEQC_INPUT_TEMPLATE.format(
-        units=units, temp=TEMPERATURE_C, ion_lines=ion_lines
+        units=units, temp=TEMPERATURE_C, ph=ph, ion_lines=ion_lines
     )
     phreeqc = _phreeqc()
     phreeqc.ip.run_string(deck)
@@ -110,17 +117,17 @@ def _water_activity_from_phreeqc(amounts, units):
     return dict(zip(output[0], output[1]))["aw"]
 
 
-def water_activity(molalities):
+def water_activity(molalities, ph=DEFAULT_PH):
     """Solvent water activity a_w of a brine from its ion molalities.
 
     Delegates to PHREEQC (pitzer.dat) via ``ACT("H2O")``. ``molalities`` maps
-    internal ion label (Na, K, Mg, Ca, Cl, SO4) -> molality Quantity [mol/kg].
-    Returns a dimensionless float in (0, 1].
+    internal ion label (Na, K, Mg, Ca, Cl, SO4) -> molality Quantity [mol/kg];
+    ``ph`` is the SOLUTION pH. Returns a dimensionless float in (0, 1].
     """
-    return _water_activity_from_phreeqc(_as_molal_floats(molalities), "mol/kgw")
+    return _water_activity_from_phreeqc(_as_molal_floats(molalities), "mol/kgw", ph)
 
 
-def osmotic_coefficient(molalities):
+def osmotic_coefficient(molalities, ph=DEFAULT_PH):
     """Molal osmotic coefficient phi of a brine.
 
     Recovered from the water activity through the exact thermodynamic identity:
@@ -131,19 +138,19 @@ def osmotic_coefficient(molalities):
     The product M_w * sum_i m_i is dimensionless; astropy carries the units and
     resolves the cancellation (including the g <-> kg scale), so it is converted
     to a dimensionless magnitude rather than stripped by hand. ``molalities``
-    maps ion label -> molality Quantity [mol/kg].
+    maps ion label -> molality Quantity [mol/kg]; ``ph`` is the SOLUTION pH.
     """
-    a_w = water_activity(molalities)
+    a_w = water_activity(molalities, ph=ph)
     total_molality = u.Quantity(list(molalities.values())).sum()
     scale = (M_WATER * total_molality).to_value(u.dimensionless_unscaled)
     return -math.log(a_w) / scale
 
 
-def pitzer_water_activity_from_molarities(molarities):
+def pitzer_water_activity_from_molarities(molarities, ph=DEFAULT_PH):
     """Pitzer a_w from a mapping of PFLOTRAN ion names to molarity [mol/L].
 
     Converts to molality (density-aware, ``conversions.py``) before the PHREEQC
-    solve. Returns 1.0 when no salt ions are present.
+    solve. ``ph`` is the SOLUTION pH. Returns 1.0 when no salt ions are present.
     """
     molalities = molarities_to_molalities(molarities)
     if not molalities:
@@ -155,12 +162,12 @@ def pitzer_water_activity_from_molarities(molarities):
     }
     if not pitzer_molalities:
         return 1.0
-    return float(water_activity(pitzer_molalities))
+    return float(water_activity(pitzer_molalities, ph=ph))
 
 
-def pitzer_water_activity_from_batch(batch_row):
+def pitzer_water_activity_from_batch(batch_row, ph=DEFAULT_PH):
     """Pitzer a_w for one incubation batch composition row."""
     molarities = {
         ion: float(batch_row.get(ion, 0.0) or 0.0) for ion in BATCH_ION_TO_PITZER
     }
-    return pitzer_water_activity_from_molarities(molarities)
+    return pitzer_water_activity_from_molarities(molarities, ph=ph)
