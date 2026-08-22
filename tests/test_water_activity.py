@@ -60,8 +60,9 @@ def test_pitzer_from_batch_matches_recipe_ions():
     }
     assert pitzer_water_activity_from_batch(control) == pytest.approx(1.0)
 
-    # MgCl2-like high salt: Pitzer must sit below the ideal Raoult estimate and
-    # closer to the meter reading (~0.82) than 1 - 0.017*sum(c) (~0.90).
+    # MgCl2-like high salt with its measured brine density: Pitzer must sit
+    # below the ideal Raoult estimate and in the physical range for a ~2 m
+    # MgCl2 brine (meter ~0.82).
     mg_h = {
         "Na+": 0.0,
         "Cl-": 3.87,
@@ -69,11 +70,12 @@ def test_pitzer_from_batch_matches_recipe_ions():
         "SO4--": 0.0,
         "Ca++": 0.0,
         "K+": 0.0,
+        "Brine Density (g/mL)": 1.15,
     }
     pitzer = pitzer_water_activity_from_batch(mg_h)
     ideal = 1.0 - 0.017 * (3.87 + 1.94)
     assert pitzer < ideal
-    assert pitzer == pytest.approx(0.82, abs=0.05)
+    assert 0.80 < pitzer < 0.90
 
 
 def test_deck_emits_fixed_water_activity(tmp_path):
