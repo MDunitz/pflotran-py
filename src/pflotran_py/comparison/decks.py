@@ -20,10 +20,18 @@ Mg, spanning roughly a factor of 1.6. A deck built from an inverted water
 activity would put the right water activity on the wrong solution.
 
 More importantly, the *composition* is what the model is being asked to carry.
-Building from the weighed salt keeps the measured water activity as an
-independent check against the Pitzer a_w the sandboxes use for inhibition
-(see ``FIXED_WATER_ACTIVITY``), and against PFLOTRAN's own ideal-Raoult
-estimate if that is left to run.
+Building from the weighed salt lets the meter-read water activity be supplied
+to the sandboxes as the inhibition input (``FIXED_WATER_ACTIVITY``), while the
+PHREEQC/``pitzer.dat`` a_w computed from that same composition is kept as an
+independent oracle for the measured-vs-modelled comparison -- as is PFLOTRAN's
+own ideal-Raoult estimate if that is left to run.
+
+The meter reading is the default inhibition input rather than the computed a_w
+on purpose: a computed a_w carries a salt-correlated error (near-exact for 1:1
+NaCl, ~0.02 high for the 2:1/2:2 Mg brines at multi-molar ionic strength), and
+feeding it in would put a salt-identity bias onto the Na-vs-Mg contrast this
+study exists to resolve. The meter is salt-blind. Pass ``--use-computed-aw``
+to override for sensitivity checks.
 """
 
 import logging
@@ -73,9 +81,13 @@ def generate_deck_for_batch(
 
     water_activity = batch_row.get("Measured Water Activity")
     kwargs = dict(generator_kwargs)
-    source = kwargs.pop("water_activity_source", "pitzer")
+    source = kwargs.pop("water_activity_source", "measured")
     if "fixed_water_activity" not in kwargs:
         if source == "pitzer":
+            # Not the default. The computed (PHREEQC/pitzer.dat) a_w carries a
+            # salt-correlated error -- ~exact for NaCl, ~0.02 high for the Mg
+            # brines (Mg_H: 0.842 model vs 0.824 meter) -- so using it here
+            # would bias the Na-vs-Mg inhibition contrast. Meter is the default.
             kwargs["fixed_water_activity"] = pitzer_water_activity_from_batch(
                 batch_row
             )
@@ -244,8 +256,18 @@ def main():
         "--use-measured-aw",
         action="store_true",
         help=(
-            "Pass each batch's meter-read water activity to the sandboxes "
-            "instead of the Pitzer value from the weighed recipe."
+            "Pass each batch's meter-read water activity to the sandboxes. "
+            "This is the default; the flag is kept for explicitness."
+        ),
+    )
+    parser.add_argument(
+        "--use-computed-aw",
+        action="store_true",
+        help=(
+            "Pass the PHREEQC/pitzer.dat a_w computed from the weighed recipe "
+            "to the sandboxes instead of the meter reading. The computed value "
+            "carries a salt-correlated error at multi-molar I; use only for "
+            "sensitivity checks, not headline runs."
         ),
     )
     parser.add_argument(
@@ -277,6 +299,8 @@ def main():
         extra["disabled_rate_keys"] = set(args.disable_reactions)
     if args.no_fixed_aw:
         extra["water_activity_source"] = "pflotran"
+    elif args.use_computed_aw:
+        extra["water_activity_source"] = "pitzer"
     elif args.use_measured_aw:
         extra["water_activity_source"] = "measured"
 
