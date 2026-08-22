@@ -3,6 +3,10 @@
 The Fortran implements f = max(0, (a_w - a_crit) / (1 - a_crit)). This test
 locks the Python-side expectation so a deck-default change cannot silently
 reintroduce a cliff without updating the documented shape.
+
+The Mg_H / Na_M a_w points below are the computed (PHREEQC/pitzer.dat) values;
+the sandbox is fed the meter-read a_w by default (--use-computed-aw to
+override), so the factor the deck actually applies uses the meter value.
 """
 
 import pytest
