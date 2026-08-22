@@ -10,6 +10,7 @@ numpy
 scipy
 tqdm
 h5py  # PFLOTRAN HDF5 output extraction
+phreeqpython  # Pitzer water activity (pitzer.dat) via iphreeqc
 
 # Development
 black
