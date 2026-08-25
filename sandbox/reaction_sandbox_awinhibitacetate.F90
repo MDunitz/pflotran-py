@@ -13,12 +13,14 @@ module Reaction_Sandbox_AWInhibitAcetate_class
 
   PetscInt, parameter :: AWINHIBITACETATE_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBITACETATE_SMOOTHSTEP_INHIBITION = 2
+  PetscInt, parameter :: AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION = 3
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitacetate_type
 
     PetscReal :: aw_threshold
     PetscInt :: inhibition_type
+    PetscReal :: fixed_water_activity
 
     ! Network-matching Monod kinetics for acetoclastic methanogenesis:
     !   Acetate- + H2O -> CH4(aq) + HCO3- + Tracer
@@ -63,6 +65,7 @@ function AWInhibitAcetateCreate()
 
   AWInhibitAcetateCreate%aw_threshold = 0.95d0
   AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_SMOOTHSTEP_INHIBITION
+  AWInhibitAcetateCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
   AWInhibitAcetateCreate%rate_constant = UNINITIALIZED_DOUBLE
   AWInhibitAcetateCreate%half_saturation_acetate = 4.0d-2
@@ -123,6 +126,15 @@ subroutine AWInhibitAcetateRead(this,input,option)
           call PrintErrMsg(option)
         endif
 
+      case('FIXED_WATER_ACTIVITY')
+        call InputReadDouble(input,option,this%fixed_water_activity)
+        call InputErrorMsg(input,option,'fixed_water_activity',error_string)
+        if (this%fixed_water_activity < 0.d0 .or. &
+            this%fixed_water_activity > 1.d0) then
+          option%io_buffer = 'FIXED_WATER_ACTIVITY must be between 0 and 1'
+          call PrintErrMsg(option)
+        endif
+
       case('RATE_CONSTANT')
         call InputReadDouble(input,option,this%rate_constant)
         call InputErrorMsg(input,option,'rate_constant',error_string)
@@ -162,6 +174,8 @@ subroutine AWInhibitAcetateRead(this,input,option)
             this%inhibition_type = AWINHIBITACETATE_THRESHOLD_INHIBITION
           case('SMOOTHSTEP')
             this%inhibition_type = AWINHIBITACETATE_SMOOTHSTEP_INHIBITION
+          case('ONE_MINUS_AW')
+            this%inhibition_type = AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION
           case default
             error_string = trim(error_string) // ',INHIBITION_TYPE'
             call InputKeywordUnrecognized(input,word,error_string ,option)
@@ -266,7 +280,11 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
             material_auxvar%volume*1.d3
   molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
-  water_activity = exp(rt_auxvar%ln_act_h2o)
+  if (Initialized(this%fixed_water_activity)) then
+    water_activity = this%fixed_water_activity
+  else
+    water_activity = exp(rt_auxvar%ln_act_h2o)
+  endif
 
   rate_constant = this%rate_constant
   if (Initialized(this%activation_energy)) then
@@ -297,7 +315,16 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
     case(AWINHIBITACETATE_SMOOTHSTEP_INHIBITION)
       ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.05d0, aw_inhibition, tempreal)
+                                        0.20d0, aw_inhibition, tempreal)
+    case(AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION)
+      if (this%aw_threshold >= 1.d0) then
+        aw_inhibition = 1.d0
+      else if (water_activity <= this%aw_threshold) then
+        aw_inhibition = 0.d0
+      else
+        aw_inhibition = (water_activity - this%aw_threshold) / &
+                        (1.d0 - this%aw_threshold)
+      endif
     case(AWINHIBITACETATE_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0

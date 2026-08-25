@@ -13,6 +13,10 @@ module Reaction_Sandbox_AWInhibit_class
 
   PetscInt, parameter :: AWINHIBIT_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBIT_SMOOTHSTEP_INHIBITION = 2
+  ! Continuous osmoregulation-style factor: f = max(0,(a_w - a_crit)/(1 - a_crit))
+  ! with a_crit = WATER_ACTIVITY_THRESHOLD. Spans the measured a_w range rather
+  ! than a ~0.1-wide log10 smoothstep cliff.
+  PetscInt, parameter :: AWINHIBIT_ONE_MINUS_AW_INHIBITION = 3
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibit_type
@@ -20,6 +24,10 @@ module Reaction_Sandbox_AWInhibit_class
     ! Water activity inhibition parameters
     PetscReal :: aw_threshold
     PetscInt :: inhibition_type
+    ! Optional override: when Initialized, used instead of exp(ln_act_h2o).
+    ! Lets closed-batch decks supply a Pitzer (or measured) a_w so inhibition
+    ! is not keyed on PFLOTRAN's ideal Raoult estimate.
+    PetscReal :: fixed_water_activity
 
     ! Network-matching Monod kinetics for hydrogenotrophic methanogenesis:
     !   4 H2(aq) + HCO3- + H+ -> CH4(aq) + 3 H2O
@@ -65,6 +73,9 @@ function AWInhibitCreate()
 
   AWInhibitCreate%aw_threshold = 0.95d0
   AWInhibitCreate%inhibition_type = AWINHIBIT_SMOOTHSTEP_INHIBITION
+  ! UNINITIALIZED => use PFLOTRAN ln_act_h2o; set FIXED_WATER_ACTIVITY to
+  ! override with an external (e.g. Pitzer) value for closed-batch decks.
+  AWInhibitCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
   AWInhibitCreate%rate_constant = UNINITIALIZED_DOUBLE
   AWInhibitCreate%half_saturation_h2 = 1.0d-1
@@ -126,6 +137,15 @@ subroutine AWInhibitRead(this,input,option)
           call PrintErrMsg(option)
         endif
 
+      case('FIXED_WATER_ACTIVITY')
+        call InputReadDouble(input,option,this%fixed_water_activity)
+        call InputErrorMsg(input,option,'fixed_water_activity',error_string)
+        if (this%fixed_water_activity < 0.d0 .or. &
+            this%fixed_water_activity > 1.d0) then
+          option%io_buffer = 'FIXED_WATER_ACTIVITY must be between 0 and 1'
+          call PrintErrMsg(option)
+        endif
+
       case('RATE_CONSTANT')
         call InputReadDouble(input,option,this%rate_constant)
         call InputErrorMsg(input,option,'rate_constant',error_string)
@@ -171,6 +191,8 @@ subroutine AWInhibitRead(this,input,option)
             this%inhibition_type = AWINHIBIT_THRESHOLD_INHIBITION
           case('SMOOTHSTEP')
             this%inhibition_type = AWINHIBIT_SMOOTHSTEP_INHIBITION
+          case('ONE_MINUS_AW')
+            this%inhibition_type = AWINHIBIT_ONE_MINUS_AW_INHIBITION
           case default
             error_string = trim(error_string) // ',INHIBITION_TYPE'
             call InputKeywordUnrecognized(input,word,error_string ,option)
@@ -280,7 +302,11 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
             material_auxvar%volume*1.d3
   molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
-  water_activity = exp(rt_auxvar%ln_act_h2o)
+  if (Initialized(this%fixed_water_activity)) then
+    water_activity = this%fixed_water_activity
+  else
+    water_activity = exp(rt_auxvar%ln_act_h2o)
+  endif
 
   rate_constant = this%rate_constant
   if (Initialized(this%activation_energy)) then
@@ -316,8 +342,21 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
       ! Positive threshold => INHIBIT_BELOW polarity: factor -> 1 as a_w rises
       ! above the threshold (rate on when wet). Do not invert -- the old
       ! 1-factor flipped that and made salt *increase* methane.
+      ! Interval 0.20 (log10) spans roughly a_w 0.75-1.2 around a 0.95 centre,
+      ! wider than the historical 0.05 cliff (~0.90-1.00).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.05d0, aw_inhibition, tempreal)
+                                        0.20d0, aw_inhibition, tempreal)
+    case(AWINHIBIT_ONE_MINUS_AW_INHIBITION)
+      ! Compatible-solute / turgor cost rises with (1 - a_w). Linear map from
+      ! a_crit (rate zero) to a_w = 1 (rate uninhibited).
+      if (this%aw_threshold >= 1.d0) then
+        aw_inhibition = 1.d0
+      else if (water_activity <= this%aw_threshold) then
+        aw_inhibition = 0.d0
+      else
+        aw_inhibition = (water_activity - this%aw_threshold) / &
+                        (1.d0 - this%aw_threshold)
+      endif
     case(AWINHIBIT_THRESHOLD_INHIBITION)
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0
