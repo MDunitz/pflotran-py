@@ -83,6 +83,7 @@ and the absence of tidal flushing in the generator's batch system.
 | Fe(OH)₃ | 1.0 × 10⁻¹⁰ | 4.7 × 10⁻⁴ | Gao et al. (2010) |
 | SO₄²⁻ | 1.0 × 10⁻⁴ | 2.0 × 10⁻⁴ | Gao et al. (2010) |
 | DOM1 (fermentation) | 5.0 × 10⁻² | — | — |
+| Acetate⁻ | 2.0 × 10⁻³ (bottle cellulose decks) / 4.0 × 10⁻² (generator default) | — | Acetoclastic Kₛ typically 0.2–5 mM (Methanosaeta / Methanosarcina); bottle comparison overrides the 40 mM network default |
 | O₂ | 1.0 × 10⁻⁴ | 1.0 × 10⁻⁵ | — |
 
 ## Salinity Inhibition
