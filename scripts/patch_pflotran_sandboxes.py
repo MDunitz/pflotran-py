@@ -5,13 +5,24 @@ Copies the three AWINHIBIT*.F90 modules from sandbox/ into PFLOTRAN's src
 directory and updates reaction_sandbox.F90, pflotran_object_files.txt, and
 pflotran_dependencies.txt. Idempotent: safe to run multiple times.
 
+Optionally install one or more generated custom sandboxes via
+--extra-sandbox-dir (e.g. sandbox/custom_YYYYMMDD_HHMMSS/).
+
 Usage:
     python3 scripts/patch_pflotran_sandboxes.py \\
         --pflotran-src /scratch/pflotran/src/pflotran \\
         --sandbox-dir /work/sandbox
+
+    python3 scripts/patch_pflotran_sandboxes.py \\
+        --pflotran-src /scratch/pflotran/src/pflotran \\
+        --sandbox-dir /work/sandbox \\
+        --extra-sandbox-dir /work/sandbox/custom_20260712_143022
 """
 
+from __future__ import annotations
+
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -60,6 +71,41 @@ reaction_sandbox_awinhibitmethyl.o : \\
   reaction_aux.o
 """
 
+# Anchors / markers used when inserting custom sandboxes into PFLOTRAN sources.
+# Prefer the stock Radon use-line; fall back to AWINHIBIT methyl after a prior patch.
+USE_ANCHORS = (
+    "  use Reaction_Sandbox_Radon_class",
+    "  use Reaction_Sandbox_AWInhibitMethyl_class",
+)
+# Insert new select-case arms immediately before the default arm.
+CASE_DEFAULT_ANCHOR = "      case default"
+OBJECT_FILE_ANCHORS = (
+    "\t${common_src}reaction_sandbox_awinhibitmethyl.o \\",
+    "\t${common_src}reaction_sandbox_ufd_wp.o \\",
+)
+REACTION_SANDBOX_DEP_ANCHORS = (
+    "  reaction_sandbox_awinhibitmethyl.o\\",
+    "  reaction_sandbox_awinhibitmethyl.o \\",
+    "  reaction_sandbox_ufd_wp.o \\",
+)
+# Substring that marks a module as extending BioHill (needs biohill.o dep).
+BIOHILL_CLASS_MARKER = "Reaction_Sandbox_BioHill_class"
+SKIP_EXTRA_STEMS = frozenset(
+    {
+        "awinhibit",
+        "awinhibitacetate",
+        "awinhibitmethyl",
+        "template",
+        "aq",
+    }
+)
+
+_F90_STEM_RE = re.compile(r"^reaction_sandbox_(.+)\.F90$")
+_MODULE_RE = re.compile(
+    r"^\s*module\s+(Reaction_Sandbox_(\w+)_class)\s*$", re.IGNORECASE
+)
+_CREATE_RE = re.compile(r"^\s*public\s*::\s*(\w+Create)\s*$", re.IGNORECASE)
+
 
 def copy_sandbox_sources(sandbox_dir: Path, pflotran_src: Path) -> None:
     for name in SANDBOX_FILES:
@@ -80,12 +126,11 @@ def patch_reaction_sandbox_f90(path: Path) -> None:
         1,
     )
 
-    anchor = "      case default"
-    if anchor not in text:
+    if CASE_DEFAULT_ANCHOR not in text:
         raise RuntimeError(f"Could not find case-anchor in {path}")
     text = text.replace(
-        anchor,
-        "\n".join(CASE_LINES) + "\n" + anchor,
+        CASE_DEFAULT_ANCHOR,
+        "\n".join(CASE_LINES) + "\n" + CASE_DEFAULT_ANCHOR,
         1,
     )
     path.write_text(text)
@@ -127,6 +172,142 @@ def patch_dependencies(path: Path) -> None:
     path.write_text(text)
 
 
+def _discover_extra_modules(extra_dir: Path) -> list[dict[str, str]]:
+    """Find generated reaction_sandbox_*.F90 modules in a custom_* folder."""
+    modules: list[dict[str, str]] = []
+    for path in sorted(extra_dir.glob("reaction_sandbox_*.F90")):
+        stem_m = _F90_STEM_RE.match(path.name)
+        if not stem_m:
+            continue
+        stem = stem_m.group(1)
+        if stem in SKIP_EXTRA_STEMS:
+            continue
+
+        text = path.read_text()
+        module_name = None
+        create_name = None
+        for line in text.splitlines():
+            if module_name is None:
+                m = _MODULE_RE.match(line)
+                if m:
+                    module_name = m.group(1)
+            if create_name is None:
+                m = _CREATE_RE.match(line)
+                if m:
+                    create_name = m.group(1)
+            if module_name and create_name:
+                break
+        if not module_name or not create_name:
+            raise RuntimeError(f"Could not parse module/create symbols from {path}")
+
+        # Keyword: uppercase stem with underscores removed (matches generator)
+        keyword = stem.upper().replace("_", "")
+        modules.append(
+            {
+                "file": path.name,
+                "stem": stem,
+                "module": module_name,
+                "create": create_name,
+                "keyword": keyword,
+                "path": str(path),
+            }
+        )
+    if not modules:
+        raise RuntimeError(f"No reaction_sandbox_*.F90 found in {extra_dir}")
+    return modules
+
+
+def _needs_biohill_dep(src_text: str) -> bool:
+    """True when the Fortran module extends BioHill and needs biohill.o."""
+    return BIOHILL_CLASS_MARKER in src_text
+
+
+def _build_module_dep_block(obj_name: str, src_text: str) -> str:
+    """Build a pflotran_dependencies.txt stanza for one sandbox object."""
+    extra_deps = ""
+    if _needs_biohill_dep(src_text):
+        extra_deps = "  reaction_sandbox_biohill.o \\\n"
+    return (
+        f"{obj_name} : \\\n"
+        f"{extra_deps}"
+        f"  reaction_sandbox_base.o \\\n"
+        f"  reactive_transport_aux.o \\\n"
+        f"  global_aux.o \\\n"
+        f"  reaction_aux.o\n"
+    )
+
+
+def _first_present_anchor(text: str, anchors: tuple[str, ...]) -> str | None:
+    for anchor in anchors:
+        if anchor in text:
+            return anchor
+    return None
+
+
+def patch_extra_sandbox(pflotran_src: Path, extra_dir: Path) -> list[str]:
+    """Copy and register generated modules from a custom_* directory."""
+    modules = _discover_extra_modules(extra_dir)
+    installed: list[str] = []
+
+    rs_path = pflotran_src / "reaction_sandbox.F90"
+    obj_path = pflotran_src / "pflotran_object_files.txt"
+    dep_path = pflotran_src / "pflotran_dependencies.txt"
+
+    rs_text = rs_path.read_text()
+    obj_text = obj_path.read_text()
+    dep_text = dep_path.read_text()
+
+    for mod in modules:
+        src = Path(mod["path"])
+        shutil.copy2(src, pflotran_src / mod["file"])
+
+        use_line = f"  use {mod['module']}"
+        if use_line not in rs_text:
+            anchor = _first_present_anchor(rs_text, USE_ANCHORS)
+            if anchor is None:
+                raise RuntimeError(f"Could not find use-anchor in {rs_path}")
+            rs_text = rs_text.replace(anchor, anchor + "\n" + use_line, 1)
+
+        case_block = (
+            f"      case('{mod['keyword']}')\n"
+            f"        new_sandbox => {mod['create']}()"
+        )
+        if f"case('{mod['keyword']}')" not in rs_text:
+            if CASE_DEFAULT_ANCHOR not in rs_text:
+                raise RuntimeError(f"Could not find case-anchor in {rs_path}")
+            rs_text = rs_text.replace(
+                CASE_DEFAULT_ANCHOR, case_block + "\n" + CASE_DEFAULT_ANCHOR, 1
+            )
+
+        obj_line = f"\t${{common_src}}reaction_sandbox_{mod['stem']}.o \\"
+        if f"reaction_sandbox_{mod['stem']}.o" not in obj_text:
+            anchor = _first_present_anchor(obj_text, OBJECT_FILE_ANCHORS)
+            if anchor is None:
+                raise RuntimeError(f"Could not find object-file anchor in {obj_path}")
+            obj_text = obj_text.replace(anchor, anchor + "\n" + obj_line, 1)
+
+        obj_name = f"reaction_sandbox_{mod['stem']}.o"
+        if obj_name not in dep_text:
+            anchor = _first_present_anchor(dep_text, REACTION_SANDBOX_DEP_ANCHORS)
+            if anchor is None:
+                raise RuntimeError(
+                    f"Could not find reaction_sandbox.o dep anchor in {dep_path}"
+                )
+            dep_text = dep_text.replace(anchor, anchor + f"\n  {obj_name}\\", 1)
+
+            src_text = Path(mod["path"]).read_text()
+            dep_block = _build_module_dep_block(obj_name, src_text)
+            if dep_block.strip() not in dep_text:
+                dep_text = dep_text.rstrip() + "\n" + dep_block + "\n"
+
+        installed.append(mod["file"])
+
+    rs_path.write_text(rs_text)
+    obj_path.write_text(obj_text)
+    dep_path.write_text(dep_text)
+    return installed
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -139,6 +320,14 @@ def main():
         required=True,
         help="Directory containing reaction_sandbox_awinhibit*.F90",
     )
+    parser.add_argument(
+        "--extra-sandbox-dir",
+        action="append",
+        default=[],
+        help=(
+            "Generated custom_* folder with reaction_sandbox_*.F90 " "(may be repeated)"
+        ),
+    )
     args = parser.parse_args()
 
     pflotran_src = Path(args.pflotran_src)
@@ -149,6 +338,10 @@ def main():
     patch_object_files(pflotran_src / "pflotran_object_files.txt")
     patch_dependencies(pflotran_src / "pflotran_dependencies.txt")
     print(f"Patched PFLOTRAN at {pflotran_src}")
+
+    for extra in args.extra_sandbox_dir:
+        installed = patch_extra_sandbox(pflotran_src, Path(extra))
+        print(f"Installed extra sandbox(es) from {extra}: {', '.join(installed)}")
 
 
 if __name__ == "__main__":

@@ -5,3 +5,5 @@ tests/custom_e2e_hdf5_output/
 build/
 .venv/
 *.egg-info/
+sandbox/custom_*/
+sandbox/examples/temp_biodegradation_hill/runs/
