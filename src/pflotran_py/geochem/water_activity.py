@@ -9,12 +9,11 @@ Na-K-Mg-Ca-H-Cl-SO4-OH-HCO3-CO3-CO2-H2O at 25 degC.
 Scale
 -----
 PHREEQC is fed ``units mol/kgw`` (molality). The molarity -> molality step is
-applied first, in ``conversions.py``, using the measured brine density rather
-than letting PHREEQC do it: PHREEQC's own ``mol/l`` conversion assumes
-rho ~= 1 kg/L for ``pitzer.dat`` and over-concentrates a multi-molar brine (a
-1.94 M MgCl2 batch lands at I ~= 7.1 mol/kg instead of ~= 5.8, dropping a_w from
-~0.84 to ~0.80). Supplying molality from a measured density keeps the conversion
-exact and salt-identity aware.
+applied first, in ``conversions.py``, rather than letting PHREEQC do it:
+PHREEQC's own ``mol/l`` conversion assumes rho ~= 1 kg/L for ``pitzer.dat`` and
+over-concentrates a multi-molar brine (a 1.94 M MgCl2 batch lands at I ~= 7.1
+mol/kg instead of ~= 5.8, dropping a_w from ~0.84 to ~0.80). Supplying molality
+directly keeps the density estimate explicit and salt-loading aware.
 
 pH
 --
@@ -147,14 +146,13 @@ def osmotic_coefficient(molalities, ph=DEFAULT_PH):
     return -math.log(a_w) / scale
 
 
-def pitzer_water_activity_from_molarities(molarities, density, ph=DEFAULT_PH):
-    """Pitzer a_w from PFLOTRAN ion names to molarity [mol/L].
+def pitzer_water_activity_from_molarities(molarities, ph=DEFAULT_PH):
+    """Pitzer a_w from a mapping of PFLOTRAN ion names to molarity [mol/L].
 
-    Converts to molality with the measured ``density`` [g/mL] (``conversions``)
-    before the PHREEQC solve. ``ph`` is the SOLUTION pH. Returns 1.0 when no
-    salt ions are present (density then unused).
+    Converts to molality (density-aware, ``conversions.py``) before the PHREEQC
+    solve. ``ph`` is the SOLUTION pH. Returns 1.0 when no salt ions are present.
     """
-    molalities = molarities_to_molalities(molarities, density)
+    molalities = molarities_to_molalities(molarities)
     if not molalities:
         return 1.0
     pitzer_molalities = {
@@ -168,18 +166,8 @@ def pitzer_water_activity_from_molarities(molarities, density, ph=DEFAULT_PH):
 
 
 def pitzer_water_activity_from_batch(batch_row, ph=DEFAULT_PH):
-    """Pitzer a_w for one batch composition row using its measured brine density.
-
-    Reads the measured "Brine Density (g/mL)" from the row and converts the ion
-    molarities to molality exactly. Salt-free rows (water controls) short out to
-    1.0 without needing a density. Note: the row's ion molarities are the
-    incubation values (brine after dilution), while the density is the neat
-    brine's -- an exact match only when the incubation is essentially undiluted.
-    """
+    """Pitzer a_w for one incubation batch composition row."""
     molarities = {
         ion: float(batch_row.get(ion, 0.0) or 0.0) for ion in BATCH_ION_TO_PITZER
     }
-    if not any(molarities.values()):
-        return 1.0
-    density = batch_row["Brine Density (g/mL)"]
-    return pitzer_water_activity_from_molarities(molarities, density, ph=ph)
+    return pitzer_water_activity_from_molarities(molarities, ph=ph)

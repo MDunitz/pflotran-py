@@ -283,9 +283,6 @@ def build_batch_table(experiment_ids=None):
                 "Measured Water Activity": batch.get("Measured Water Activity"),
                 "Measured pH": batch.get("Measured pH"),
                 "Dilution": dilution,
-                "Brine Density (g/mL)": brines.loc[brine_id].get(
-                    "Brine Density (g/mL)"
-                ),
             }
             for ion in ALL_IONS:
                 record[ion] = brine_molarities[ion] * dilution
