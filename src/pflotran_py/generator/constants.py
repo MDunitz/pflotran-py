@@ -36,9 +36,9 @@ BOTTLE_GAS_SATURATION = HEADSPACE_VOLUME_L / VIAL_VOLUME_L  # 0.8
 # used and the value is exposed as a parameter for anyone who needs it exact.
 BOTTLE_GAS_PRESSURE_PA = 1.01325e5
 
-# Incubation temperature [deg C]. The post-processing package already assumes
-# 18 C for its Stokes-Einstein diffusion correction (see config.py); this makes
-# the simulation agree with it.
+# Incubation temperature [deg C]. Visualization Stokes-Einstein correction
+# (config.DEFAULT_TEMPERATURE_C) imports this so the simulation and post-
+# processing stay on the same temperature.
 BOTTLE_TEMPERATURE_C = 18.0
 
 # Long enough to span the measured incubations with margin. The pipeline's own

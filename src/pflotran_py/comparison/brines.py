@@ -48,6 +48,14 @@ import os
 
 import pandas as pd
 
+from ..geochem.constants import (
+    ALL_IONS,
+    BATCH_ION_CHARGE,
+    ION_MOLAR_MASS_G_PER_MOL,
+    MOLAR_MASS_G_PER_MOL,
+    SALT_DISSOCIATION,
+    SEA_SALT_ION_MASS_FRACTION,
+)
 from .corrections import check_mass_balance, correct_sea_salt_makeup_volume
 
 logger = logging.getLogger(__name__)
@@ -67,55 +75,15 @@ BATCH_TAB_GIDS = {
     "Exp004": "559062879",
 }
 
-# ═════════════════════════════════════════════════════════════════════
-# Chemistry
-# ═════════════════════════════════════════════════════════════════════
-
-MOLAR_MASS_G_PER_MOL = {
-    "NaCl": 58.44,
-    "MgCl2*6H2O": 203.30,  # hexahydrate; the anhydrous value would be wrong by 2.1x
-    "Na2SO4": 142.04,
-}
-
-# Ions each salt releases per formula unit.
-SALT_DISSOCIATION = {
-    "NaCl": {"Na+": 1, "Cl-": 1},
-    "MgCl2*6H2O": {"Mg++": 1, "Cl-": 2},
-    "Na2SO4": {"Na+": 2, "SO4--": 1},
-}
-
-# Mass fraction of each major ion in seawater salt (Millero 2013, Chemical
-# Oceanography 4th ed.). These sum to 0.9927; the balance is bicarbonate,
-# bromide and strontium, which the reaction network does not track.
-SEA_SALT_ION_MASS_FRACTION = {
-    "Cl-": 0.5503,
-    "Na+": 0.3059,
-    "SO4--": 0.0768,
-    "Mg++": 0.0368,
-    "Ca++": 0.0118,
-    "K+": 0.0111,
-}
-
-ION_MOLAR_MASS_G_PER_MOL = {
-    "Cl-": 35.45,
-    "Na+": 22.99,
-    "SO4--": 96.06,
-    "Mg++": 24.31,
-    "Ca++": 40.08,
-    "K+": 39.10,
-}
-
 # Column on the Brines tab -> the salt it records. The sheet writes the sulfate
 # salt as "NaSO4"; the compound weighed out is sodium sulfate, Na2SO4, which is
-# what the molar mass and dissociation above assume.
+# what geochem.constants.MOLAR_MASS_G_PER_MOL / SALT_DISSOCIATION assume.
 SALT_COLUMNS = {
     "NaCl (g)": "NaCl",
     "MgCl2*6H2O (g)": "MgCl2*6H2O",
     "NaSO4 (g)": "Na2SO4",
 }
 SEA_SALT_COLUMN = "Artificial Sea Salt (g)"
-
-ALL_IONS = ["Na+", "Cl-", "Mg++", "SO4--", "Ca++", "K+"]
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -287,9 +255,6 @@ def build_batch_table(experiment_ids=None):
             rows.append(record)
 
     return pd.DataFrame(rows)
-
-
-_ION_CHARGE = {"Na+": 1, "Cl-": -1, "Mg++": 2, "SO4--": -2, "Ca++": 2, "K+": 1}
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -509,7 +474,7 @@ def ionic_strength(molarities):
     they sit.
     """
     return 0.5 * sum(
-        concentration * _ION_CHARGE[ion] ** 2
+        concentration * BATCH_ION_CHARGE[ion] ** 2
         for ion, concentration in molarities.items()
     )
 

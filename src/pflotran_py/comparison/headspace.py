@@ -80,6 +80,12 @@ from dataclasses import dataclass
 import numpy as np
 from astropy import units as u
 
+from ..generator.constants import (
+    BOTTLE_TEMPERATURE_C,
+    HEADSPACE_VOLUME_L,
+    LIQUID_VOLUME_L,
+)
+
 # Universal gas constant.
 R = 8.314462618 * u.J / (u.mol * u.K)
 
@@ -154,15 +160,13 @@ GASES = {
 class BottleGeometry:
     """The liquid and gas volumes of one sealed incubation vial.
 
-    Defaults match both the measurement pipeline's constants and the closed
-    batch deck built by
-    :mod:`pflotran_py.generator.bottle_generator`. If the two ever disagree,
-    the comparison is silently comparing differently-sized bottles, so they are
-    stated here once and asserted against in the test suite.
+    Defaults come from :mod:`pflotran_py.generator.constants` so the
+    comparison and the closed-batch deck describe the same bottle. The test
+    suite still asserts agreement in case a future edit re-hardcodes volumes.
     """
 
-    liquid_volume: u.Quantity = 0.025 * u.L
-    headspace_volume: u.Quantity = 0.100 * u.L
+    liquid_volume: u.Quantity = LIQUID_VOLUME_L * u.L
+    headspace_volume: u.Quantity = HEADSPACE_VOLUME_L * u.L
 
     @property
     def total_volume(self):
@@ -171,8 +175,8 @@ class BottleGeometry:
 
 DEFAULT_BOTTLE = BottleGeometry()
 
-# Incubation temperature. Matches the closed batch deck.
-DEFAULT_TEMPERATURE = 18.0 * u.deg_C
+# Incubation temperature. Same source as the closed-batch deck.
+DEFAULT_TEMPERATURE = BOTTLE_TEMPERATURE_C * u.deg_C
 
 
 # ═════════════════════════════════════════════════════════════════════
