@@ -1,19 +1,11 @@
 """Measured brine compositions for the sealed-bottle incubations.
 
-A PFLOTRAN deck needs the concentration of each individual ion. The laboratory
-records something different: the *mass of each salt* weighed out into a brine,
+A PFLOTRAN deck needs the concentration of each individual ion. The specific 
+experiment being modeled here records the *mass of each salt* weighed out into a brine,
 and the volume that brine was made up to. This module converts one into the
 other, so that a deck can be built from what was actually in the bottle rather
 than from a guess.
 
-Why this matters more than it might sound. The deck generator can invert a
-target water activity into a NaCl concentration, but three of the lowest water
-activities in the older exported data would need 7 to 12 mol/kg NaCl, and NaCl
-saturates near 6.1 mol/kg. Those batches were never NaCl. Reading the real
-recipe shows what they were: magnesium chloride and artificial sea salt, which
-reach much lower water activities at attainable concentrations. Building decks
-from an inverted water activity alone would have modelled a solution that
-cannot exist.
 
 Data source
 -----------
