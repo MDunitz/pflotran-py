@@ -41,6 +41,12 @@ import pandas as pd
 
 from ..geochem.water_activity import pitzer_water_activity_from_batch
 from ..generator.bottle_generator import BOTTLE_FINAL_TIME_DAYS, BottleGenerator
+from ..generator.constants import (
+    AW_CRIT_ACETOCLASTIC,
+    AW_CRIT_HYDROGENOTROPHIC,
+    AW_CRIT_METHYLOTROPHIC,
+    AW_INHIBITION_TYPE,
+)
 from .brines import to_pflotran_constraints
 
 logger = logging.getLogger(__name__)
@@ -185,11 +191,42 @@ def main():
     parser.add_argument(
         "--aw-threshold",
         type=float,
-        default=0.95,
+        default=AW_CRIT_HYDROGENOTROPHIC,
         help=(
-            "Water activity at which the sandboxes centre their smoothstep. "
-            "Default 0.95 sits at the top of the measured salted range so "
-            "inhibition engages across Exp003/Exp004; it is not a methane fit."
+            "Critical water activity for hydrogenotrophic methanogenesis "
+            "(and the fallback if pathway-specific flags are omitted). "
+            f"Default {AW_CRIT_HYDROGENOTROPHIC} from generator.constants "
+            "(Oren 1999/2011; floor just below the driest bottle). With "
+            "ONE_MINUS_AW this is a_crit where that pathway's rate hits zero."
+        ),
+    )
+    parser.add_argument(
+        "--aw-threshold-acetate",
+        type=float,
+        default=AW_CRIT_ACETOCLASTIC,
+        help=(
+            "a_crit for acetoclastic methanogenesis "
+            f"(default {AW_CRIT_ACETOCLASTIC} from generator.constants; "
+            "most salt-sensitive of the three, Oren 1999/2011)."
+        ),
+    )
+    parser.add_argument(
+        "--aw-threshold-methyl",
+        type=float,
+        default=AW_CRIT_METHYLOTROPHIC,
+        help=(
+            "a_crit for methylotrophic methanogenesis "
+            f"(default {AW_CRIT_METHYLOTROPHIC} from generator.constants; "
+            "between acetoclastic and hydrogenotrophic)."
+        ),
+    )
+    parser.add_argument(
+        "--aw-inhibition-type",
+        choices=("ONE_MINUS_AW", "SMOOTHSTEP", "THRESHOLD"),
+        default=AW_INHIBITION_TYPE,
+        help=(
+            "Shape of the a_w rate factor. ONE_MINUS_AW is continuous in "
+            "(1-a_w); SMOOTHSTEP is a log10 logistic (interval 0.20)."
         ),
     )
     parser.add_argument(
@@ -318,6 +355,9 @@ def main():
         output_dir=args.output_dir,
         final_time_days=args.final_time_days,
         aw_threshold=args.aw_threshold,
+        aw_threshold_acetate=args.aw_threshold_acetate,
+        aw_threshold_methyl=args.aw_threshold_methyl,
+        aw_inhibition_type=args.aw_inhibition_type,
         **extra,
     )
 
@@ -332,7 +372,15 @@ def main():
         )
 
     lowest = result["Measured Water Activity"].min()
-    if lowest > args.aw_threshold:
+    if args.aw_inhibition_type == "ONE_MINUS_AW":
+        print()
+        print(
+            f"Sandbox ONE_MINUS_AW a_crit by pathway: "
+            f"H2={args.aw_threshold}, methyl={args.aw_threshold_methyl}, "
+            f"acetate={args.aw_threshold_acetate} "
+            f"(driest measured = {lowest:.3f})."
+        )
+    elif lowest > args.aw_threshold:
         print()
         print(
             f"Note: the driest batch sits at water activity {lowest:.3f}, above the "
