@@ -16,6 +16,8 @@ echo "==> Building pflotran-py-test image with patched AWINHIBIT sandboxes"
 docker build -t pflotran-py-test -f Containerfile .
 
 echo "==> Generating decks (cellulose; a_w sandboxes; no Cl- Monod)"
+# Meter-read a_w is FIXED_WATER_ACTIVITY by default. Add --use-computed-aw
+# only to feed PHREEQC/pitzer.dat a_w into the sandboxes instead.
 rm -rf decks
 python -m pflotran_py.comparison.decks --output-dir decks \
   --cellulose-hydrolysis --no-cl-inhibition --aw-threshold 0.95

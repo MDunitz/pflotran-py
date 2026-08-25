@@ -254,7 +254,8 @@ class PFLOTRANGenerator:
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
         aw_inhibition_type="SMOOTHSTEP",
         # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
-        # value. Comparison decks pass the Pitzer a_w of the batch brine.
+        # value. Comparison decks pass the meter-read a_w by default; the
+        # computed PHREEQC/pitzer.dat value is opt-in (--use-computed-aw).
         fixed_water_activity=None,
         # --- Domain geometry ---
         dimensions="1d",

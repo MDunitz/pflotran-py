@@ -560,9 +560,12 @@ inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
 and `--aw-threshold 0.95` (top of the measured salted range; not a methane
-fit), and pass each batch's **Pitzer** water activity as `FIXED_WATER_ACTIVITY`
-so inhibition is not keyed on PFLOTRAN's ideal Raoult estimate (which is too
-high for Mg brines). Rebuild the container after pulling sandbox Fortran
+fit), and pass each batch's **meter-read** water activity as
+`FIXED_WATER_ACTIVITY`. PHREEQC/`pitzer.dat` a_w computed from the weighed
+recipe is an independent oracle, not the default inhibition input: it is
+near-exact for 1:1 NaCl and ~0.02 high for the Mg brines, so feeding it in
+would bias the Na-vs-Mg contrast. Pass `--use-computed-aw` only for
+sensitivity checks. Rebuild the container after pulling sandbox Fortran
 changes.
 
 ### Running it
