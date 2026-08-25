@@ -22,12 +22,6 @@ Sources:
 
 from datetime import datetime
 
-from .constants import (
-    AW_CRIT_ACETOCLASTIC,
-    AW_CRIT_HYDROGENOTROPHIC,
-    AW_CRIT_METHYLOTROPHIC,
-    AW_INHIBITION_TYPE,
-)
 from .pflotran_templates import (
     HEADER,
     PRIMARY_SPECIES,
@@ -250,13 +244,16 @@ class PFLOTRANGenerator:
         # only for attribution runs that need the old dead-parallel behaviour.
         aw_sandbox_replaces_network_methanogenesis=True,
         # --- Reaction sandbox: water activity inhibition ---
-        # Defaults and citations: generator.constants (AW_CRIT_*).
-        # ONE_MINUS_AW maps rate to max(0,(a_w - a_crit)/(1 - a_crit)).
-        aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
-        aw_threshold_acetate=AW_CRIT_ACETOCLASTIC,
-        aw_threshold_methyl=AW_CRIT_METHYLOTROPHIC,
+        # ONE_MINUS_AW maps rate to max(0,(a_w - a_crit)/(1 - a_crit)), a
+        # continuous osmoregulation-style factor across the measured a_w
+        # range. a_crit defaults differ by pathway (acetoclastic most
+        # salt-sensitive): see aw_threshold_acetate / _methyl. The shared
+        # aw_threshold is the hydrogenotrophic floor and the fallback.
+        aw_threshold=0.91,
+        aw_threshold_acetate=0.92,
+        aw_threshold_methyl=0.91,
         aw_rate_constant=None,  # unused when per-pathway rates are emitted
-        aw_inhibition_type=AW_INHIBITION_TYPE,
+        aw_inhibition_type="ONE_MINUS_AW",
         # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
         # value. Comparison decks pass the meter-read a_w by default; the
         # computed PHREEQC/pitzer.dat value is opt-in (--use-computed-aw).

@@ -576,15 +576,16 @@ inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
 and `--aw-inhibition-type ONE_MINUS_AW` with pathway-specific
-`a_crit` from `pflotran_py.generator.constants` (hydrogenotrophic 0.80,
-methylotrophic 0.85, acetoclastic 0.90 — acetoclasts fail first under salt;
-Oren 1999/2011, not a methane fit),
-and pass each batch's **meter-read** water activity as
-`FIXED_WATER_ACTIVITY`. PHREEQC/`pitzer.dat` a_w computed from the weighed
-recipe is an independent oracle, not the default inhibition input: it is
-near-exact for 1:1 NaCl and ~0.02 high for the Mg brines, so feeding it in
-would bias the Na-vs-Mg contrast. Pass `--use-computed-aw` only for
-sensitivity checks. With `--cellulose-hydrolysis`, the acetoclastic
+`a_crit` (hydrogenotrophic/methylotrophic 0.91, acetoclastic 0.92),
+plus `--aw-upstream-inhibition` so fermentation and cellulose hydrolysis
+are scaled by the same ONE_MINUS_AW factor on each batch's fixed a_w
+(defaults: fermentation 0.90, hydrolysis 0.85). Also pass
+each batch's **meter-read** water activity as `FIXED_WATER_ACTIVITY`.
+PHREEQC/`pitzer.dat` a_w computed from the weighed recipe is an independent
+oracle, not the default inhibition input: it is near-exact for 1:1 NaCl and
+~0.02 high for the Mg brines, so feeding it in would bias the Na-vs-Mg
+contrast. Pass `--use-computed-aw` only for sensitivity checks. With
+`--cellulose-hydrolysis`, the acetoclastic
 `H+_below` Monod Ki is also moved from 2.88×10⁻⁷ (half at pH ~6.5) to
 3.16×10⁻⁸ (half at pH ~7.5), matching the upper edge of the usual acetoclast
 optimum — otherwise bottle controls that drift to pH ~7.9 bank acetate and
@@ -605,7 +606,8 @@ python -m pflotran_py.comparison.brines --output data/incubation_batch_compositi
 python -m pflotran_py.comparison.decks --output-dir decks \
     --cellulose-hydrolysis --no-cl-inhibition \
     --aw-inhibition-type ONE_MINUS_AW \
-    --aw-threshold 0.80 --aw-threshold-methyl 0.85 --aw-threshold-acetate 0.90
+    --aw-threshold 0.91 --aw-threshold-methyl 0.91 --aw-threshold-acetate 0.92 \
+    --aw-upstream-inhibition --aw-threshold-fermentation 0.90 --aw-threshold-hydrolysis 0.85
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
