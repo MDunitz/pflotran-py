@@ -63,7 +63,9 @@ function AWInhibitAcetateCreate()
 
   allocate(AWInhibitAcetateCreate)
 
-  AWInhibitAcetateCreate%aw_threshold = 0.95d0
+  ! Default a_crit matches generator.constants AW_CRIT_ACETOCLASTIC (0.90).
+  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  AWInhibitAcetateCreate%aw_threshold = 0.90d0
   AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_SMOOTHSTEP_INHIBITION
   AWInhibitAcetateCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 

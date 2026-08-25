@@ -71,7 +71,9 @@ function AWInhibitCreate()
 
   allocate(AWInhibitCreate)
 
-  AWInhibitCreate%aw_threshold = 0.95d0
+  ! Default a_crit matches generator.constants AW_CRIT_HYDROGENOTROPHIC (0.80).
+  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  AWInhibitCreate%aw_threshold = 0.80d0
   AWInhibitCreate%inhibition_type = AWINHIBIT_SMOOTHSTEP_INHIBITION
   ! UNINITIALIZED => use PFLOTRAN ln_act_h2o; set FIXED_WATER_ACTIVITY to
   ! override with an external (e.g. Pitzer) value for closed-batch decks.

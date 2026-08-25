@@ -59,7 +59,9 @@ function AWInhibitMethylCreate()
 
   allocate(AWInhibitMethylCreate)
 
-  AWInhibitMethylCreate%aw_threshold = 0.95d0
+  ! Default a_crit matches generator.constants AW_CRIT_METHYLOTROPHIC (0.85).
+  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  AWInhibitMethylCreate%aw_threshold = 0.85d0
   AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION
   AWInhibitMethylCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
