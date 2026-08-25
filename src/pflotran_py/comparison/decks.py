@@ -134,7 +134,7 @@ def generate_deck_for_batch(
 
     water_activity = batch_row.get("Measured Water Activity")
     kwargs = dict(generator_kwargs)
-    source = kwargs.pop("water_activity_source", "pitzer")
+    source = kwargs.pop("water_activity_source", "measured")
     if "fixed_water_activity" not in kwargs:
         if source == "pitzer":
             kwargs["fixed_water_activity"] = pitzer_water_activity_from_batch(
@@ -361,8 +361,18 @@ def main():
         "--use-measured-aw",
         action="store_true",
         help=(
-            "Pass each batch's meter-read water activity to the sandboxes "
-            "instead of the Pitzer value from the weighed recipe."
+            "Pass each batch's meter-read water activity to the sandboxes. "
+            "This is the default; the flag is kept for explicitness."
+        ),
+    )
+    parser.add_argument(
+        "--use-computed-aw",
+        action="store_true",
+        help=(
+            "Pass the PHREEQC/pitzer.dat a_w computed from the weighed recipe "
+            "to the sandboxes instead of the meter reading. The computed value "
+            "carries a salt-correlated error at multi-molar I; use only for "
+            "sensitivity checks, not headline runs."
         ),
     )
     parser.add_argument(
@@ -409,6 +419,8 @@ def main():
         extra["disabled_rate_keys"] = set(args.disable_reactions)
     if args.no_fixed_aw:
         extra["water_activity_source"] = "pflotran"
+    elif args.use_computed_aw:
+        extra["water_activity_source"] = "pitzer"
     elif args.use_measured_aw:
         extra["water_activity_source"] = "measured"
     if args.aw_upstream_inhibition:
