@@ -75,56 +75,25 @@ Sources:
 import math
 import os
 
-from .constants import AW_CRIT_HYDROGENOTROPHIC
+from .constants import (
+    AW_CRIT_HYDROGENOTROPHIC,
+    BOTTLE_FINAL_TIME_DAYS,
+    BOTTLE_GAS_PRESSURE_PA,
+    BOTTLE_GAS_SATURATION,
+    BOTTLE_POROSITY,
+    BOTTLE_TEMPERATURE_C,
+    HEADSPACE_VOLUME_L,
+    LIQUID_VOLUME_L,
+    VIAL_VOLUME_L,
+)
 from .pflotran_generator import PFLOTRANGenerator
 
-# ═════════════════════════════════════════════════════════════════════
-# Vial geometry
-# ═════════════════════════════════════════════════════════════════════
-#
-# These match the constants the measurement pipeline uses to turn headspace
-# concentrations into moles (saltyBiomass, experiments/analysis/incubations/
-# constants.py). If those change, these must change with them, or the model and
-# the measurement will be describing differently-sized bottles.
-
-VIAL_VOLUME_L = 0.125  # total internal volume of the vial [L]
-HEADSPACE_VOLUME_L = 0.100  # gas volume above the liquid [L]
-LIQUID_VOLUME_L = VIAL_VOLUME_L - HEADSPACE_VOLUME_L  # brine + biomass [L]
+# Bottle geometry / run defaults live in ``constants`` and are re-exported
+# here so ``from ...bottle_generator import VIAL_VOLUME_L`` keeps working.
 
 # PFLOTRAN works in metres. A cube of this edge length has the vial's volume.
 # 0.125 L = 1.25e-4 m^3, and (1.25e-4)^(1/3) = 0.05 m exactly.
 _VIAL_EDGE_M = (VIAL_VOLUME_L * 1e-3) ** (1.0 / 3.0)
-
-# Porosity of a bottle is not the porosity of packed sediment. The vial is
-# essentially all fluid, so porosity approaches 1. It is held just below 1
-# because a porosity of exactly 1 leaves PFLOTRAN with no solid phase for the
-# mineral reactions to attach to.
-BOTTLE_POROSITY = 0.99
-
-# Fraction of pore space occupied by gas. With porosity ~1 this is just the
-# headspace fraction of the vial.
-BOTTLE_GAS_SATURATION = HEADSPACE_VOLUME_L / VIAL_VOLUME_L  # 0.8
-
-# Bottles are sealed at roughly local atmospheric pressure. The measurement
-# pipeline uses 0.969 atm (Pasadena, ~260 m elevation); the difference from
-# 1 atm is well inside the uncertainty on everything else here, so 1 atm is
-# used and the value is exposed as a parameter for anyone who needs it exact.
-BOTTLE_GAS_PRESSURE_PA = 1.01325e5
-
-# Incubation temperature [deg C]. The post-processing package already assumes
-# 18 C for its Stokes-Einstein diffusion correction (see config.py); this makes
-# the simulation agree with it.
-BOTTLE_TEMPERATURE_C = 18.0
-
-# Long enough to span the measured incubations with margin. The pipeline's own
-# output runs to 119 days for Exp003 and 122 for Exp004, so a simulation must
-# reach at least 122 days for the comparison to cover the whole measured record
-# rather than stopping partway through it.
-#
-# An earlier value of 60 days was set from the older exported files, which end
-# at 42 and 51 days. Those exports turned out to be a stale snapshot; the live
-# pipeline output runs twice as long.
-BOTTLE_FINAL_TIME_DAYS = 130
 
 # ═════════════════════════════════════════════════════════════════════
 # Water activity <-> NaCl molality

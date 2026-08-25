@@ -292,7 +292,7 @@ Three files named `constants.py`; they are not interchangeable:
 
 | File | What it holds |
 |------|----------------|
-| `src/pflotran_py/generator/constants.py` | Deck-generator kinetic defaults written into `.in` files: pathway `a_crit` (Oren 1999/2011) and `ONE_MINUS_AW`. CLI flags and `PFLOTRANGenerator` import from here. |
+| `src/pflotran_py/generator/constants.py` | Deck-generator defaults written into `.in` files: sealed-bottle geometry/run setup (`VIAL_VOLUME_L`, `BOTTLE_*`) and pathway `a_crit` / `ONE_MINUS_AW` (Oren 1999/2011). CLI flags and generators import from here. |
 | `src/pflotran_py/analysis/constants.py` | Post-processing physics: Boudreau 25 °C diffusion coefficients, Vogel water viscosity, unit-conversion factors. Used by the visualization physics layer, not by deck generation. |
 | `exploratory/constants.py` | Notebook/unit-conversion leftovers (molar mass of C, sample volume, time factors). Exploratory only; the package does not import it. |
 
