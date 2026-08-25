@@ -45,3 +45,24 @@ ION_MOLAR_MASS = {
     "Cl-": 35.453 * u.g / u.mol,
     "SO4--": 96.06 * u.g / u.mol,
 }
+
+# ═════════════════════════════════════════════════════════════════════
+# Hand-rolled binary NaCl Pitzer parameters (legacy a_w <-> molality invert)
+# ═════════════════════════════════════════════════════════════════════
+#
+# Only ``generator.bottle_generator`` uses these today, for the optional
+# NaCl-only water-activity inversion that builds thought-experiment decks.
+# The primary multi-salt a_w path is PHREEQC ``pitzer.dat`` via
+# ``water_activity.py``; do not extend this table for new science work.
+#
+# Refs: Pitzer & Mayorga (1973) J. Phys. Chem. 77(19), 2300-2308, Table I.
+
+NACL_PITZER_A_PHI = 0.3915  # Debye-Huckel osmotic coefficient, 25 C [kg^0.5/mol^0.5]
+NACL_PITZER_B = 1.2  # universal Pitzer constant [kg^0.5/mol^0.5]
+NACL_PITZER_ALPHA = 2.0  # universal for 1:1 electrolytes [kg^0.5/mol^0.5]
+NACL_BETA0 = 0.0765
+NACL_BETA1 = 0.2664
+NACL_CPHI = 0.00127
+NACL_NU = 2  # ions per formula unit: Na+ and Cl-
+# Bare float twin of M_WATER for the bottle inversion (no astropy required there).
+NACL_M_WATER_G_PER_MOL = 18.0153

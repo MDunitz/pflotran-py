@@ -75,6 +75,16 @@ Sources:
 import math
 import os
 
+from ..geochem.constants import (
+    NACL_BETA0,
+    NACL_BETA1,
+    NACL_CPHI,
+    NACL_M_WATER_G_PER_MOL,
+    NACL_NU,
+    NACL_PITZER_A_PHI,
+    NACL_PITZER_ALPHA,
+    NACL_PITZER_B,
+)
 from .constants import (
     AW_CRIT_HYDROGENOTROPHIC,
     BOTTLE_FINAL_TIME_DAYS,
@@ -111,16 +121,9 @@ _VIAL_EDGE_M = (VIAL_VOLUME_L * 1e-3) ** (1.0 / 3.0)
 # computed should be read back out of the output and compared against the
 # measured value -- that round trip, not this function, is what establishes
 # whether a deck sits where it was meant to sit.
-
-_PITZER_A_PHI = 0.3915  # Debye-Huckel osmotic coefficient, 25 C [kg^0.5/mol^0.5]
-_PITZER_B = 1.2  # universal Pitzer constant [kg^0.5/mol^0.5]
-_PITZER_ALPHA = 2.0  # universal for 1:1 electrolytes [kg^0.5/mol^0.5]
-_NACL_BETA0 = 0.0765  # Pitzer & Mayorga (1973), Table I
-_NACL_BETA1 = 0.2664
-_NACL_CPHI = 0.00127
-
-_M_WATER_G_PER_MOL = 18.0153
-_NACL_NU = 2  # ions per formula unit: Na+ and Cl-
+#
+# Binary NaCl Pitzer coefficients live in ``pflotran_py.geochem.constants``;
+# this module is currently their only caller.
 
 
 def nacl_osmotic_coefficient(molality):
@@ -147,11 +150,11 @@ def nacl_osmotic_coefficient(molality):
     ionic_strength = molality
     sqrt_i = math.sqrt(ionic_strength)
 
-    debye_huckel = -_PITZER_A_PHI * sqrt_i / (1.0 + _PITZER_B * sqrt_i)
+    debye_huckel = -NACL_PITZER_A_PHI * sqrt_i / (1.0 + NACL_PITZER_B * sqrt_i)
     second_virial = molality * (
-        _NACL_BETA0 + _NACL_BETA1 * math.exp(-_PITZER_ALPHA * sqrt_i)
+        NACL_BETA0 + NACL_BETA1 * math.exp(-NACL_PITZER_ALPHA * sqrt_i)
     )
-    third_virial = molality**2 * _NACL_CPHI
+    third_virial = molality**2 * NACL_CPHI
 
     return 1.0 + debye_huckel + second_virial + third_virial
 
@@ -179,7 +182,7 @@ def water_activity_from_nacl_molality(molality):
     if molality <= 0:
         return 1.0
     phi = nacl_osmotic_coefficient(molality)
-    ln_aw = -_NACL_NU * molality * phi * _M_WATER_G_PER_MOL / 1000.0
+    ln_aw = -NACL_NU * molality * phi * NACL_M_WATER_G_PER_MOL / 1000.0
     return math.exp(ln_aw)
 
 
