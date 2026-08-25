@@ -21,9 +21,8 @@ from bokeh.models import (
     Div,
     HoverTool,
     RadioButtonGroup,
-    CheckboxGroup,
 )
-from bokeh.palettes import Category10, Dark2
+from bokeh.palettes import Category10
 from scipy.optimize import curve_fit
 import warnings
 import os
@@ -494,7 +493,7 @@ def create_plots_by_gas(data, projection_days):
 
 def update_plots():
     """Update plots based on current widget selections"""
-    global current_data, plots_container
+    global current_data
 
     # Get widget values
     dataset = dataset_select.value
@@ -529,12 +528,6 @@ def update_plots():
     # Update status
     unique_conditions = len(current_data["experiment_condition"].unique())
     unique_gases = len(current_data["Gas"].unique())
-
-    # Count how many experiments have water activity labels vs experiment IDs
-    water_activity_labels = (
-        current_data["display_label"].str.contains("water_activity").sum()
-    )
-    exp_id_labels = unique_conditions - (water_activity_labels > 0)
 
     status_div.text = f"""
     <div style='color: green;'>

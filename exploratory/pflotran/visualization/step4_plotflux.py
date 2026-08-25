@@ -20,12 +20,7 @@ def install_dependencies():
 
     for package in packages:
         try:
-            if package == "bokeh":
-                import bokeh
-            elif package == "scipy":
-                import scipy
-            else:
-                __import__(package)
+            __import__(package)
             print(f"{package} is already installed")
         except ImportError:
             print(f"Installing {package}...")
@@ -57,7 +52,6 @@ def load_data(filename="pflotran_data.pkl"):
 # 3) Calculate concentration gradients and fluxes (for Co2 and CH4 conc)
 ########################################################################
 def calculate_concentration_gradients(df):
-    from scipy.spatial.distance import cdist
 
     # Create a copy of the dataframe
     flux_df = df.copy()
@@ -228,8 +222,7 @@ def extract_point_time_series(flux_df, target_x, target_y, target_z):
 def create_flux_time_series_plot(point_data, target_x, target_y, target_z):
     from bokeh.plotting import figure, save, output_file
     from bokeh.layouts import column
-    from bokeh.models import HoverTool, ColumnDataSource, Legend
-    from bokeh.io import curdoc
+    from bokeh.models import HoverTool, ColumnDataSource
 
     if len(point_data) == 0:
         print("No data available for plotting")

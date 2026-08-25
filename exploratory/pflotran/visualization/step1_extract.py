@@ -15,7 +15,6 @@ import os
 import sys
 import subprocess
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 
 
@@ -64,13 +63,13 @@ def read_tec_file(filepath):
         lines = f.readlines()
 
     # Extract variables
-    var_line = next(l for l in lines if l.startswith("VARIABLES"))
+    var_line = next(line for line in lines if line.startswith("VARIABLES"))
     variables = [v.strip().strip('"') for v in var_line.split("=")[1].split(",")]
 
     # Extract data lines (after the ZONE line)
-    data_start_idx = next(i for i, l in enumerate(lines) if l.startswith("ZONE"))
+    data_start_idx = next(i for i, line in enumerate(lines) if line.startswith("ZONE"))
     data_lines = lines[data_start_idx + 1 :]
-    data = [list(map(float, l.strip().split())) for l in data_lines]
+    data = [list(map(float, line.strip().split())) for line in data_lines]
 
     df = pd.DataFrame(data, columns=variables)
     return df
@@ -108,7 +107,7 @@ def extract_pflotran_data(data_dir=".", file_template="test29-{:03d}.tec", n_fil
 
     # Get variable names from sample file
     variable_names = get_variable_names(sample_filepath)
-    print(f"\n Variables found in tecplot files:")
+    print("\n Variables found in tecplot files:")
     for i, var in enumerate(variable_names):
         print(f"   {i:2d}: {var}")
 
@@ -142,7 +141,7 @@ def extract_pflotran_data(data_dir=".", file_template="test29-{:03d}.tec", n_fil
     print(f"\nCombining data from {files_read} files...")
     full_df = pd.concat(all_data, ignore_index=True)
 
-    print(f"Data extraction complete!")
+    print("Data extraction complete!")
     print(f"   Combined dataset shape: {full_df.shape}")
     print(f"   Time indices: {sorted(full_df['Time Index'].unique())}")
     print(f"   Variables: {len(variable_names)}")
@@ -179,7 +178,7 @@ def main():
     file_template = "test29-{:03d}.tec"
     n_files = 100
 
-    print(f"\nExtracting data...")
+    print("\nExtracting data...")
 
     # Extract data
     full_df, variable_names = extract_pflotran_data(
@@ -187,15 +186,15 @@ def main():
     )
 
     if full_df is not None:
-        print(f"\nSaving data...")
+        print("\nSaving data...")
         save_data(full_df, "pflotran_data.pkl")
 
-        print(f"\nNext steps:")
-        print(f"   Run: python step2_plot.py")
-        print(f"   This will create interactive 3D visualizations of your data.")
+        print("\nNext steps:")
+        print("   Run: python step2_plot.py")
+        print("   This will create interactive 3D visualizations of your data.")
 
         # Import and run step2 automatically
-        print(f"\nAutomatically running visualization script...")
+        print("\nAutomatically running visualization script...")
         try:
             if os.path.exists("step2_plot.py"):
                 import step2_plot

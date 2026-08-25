@@ -51,8 +51,8 @@ def colorbar_position(row, col, n_cols):
 def format_time_label(time_days):
     """Compact label for slider / frame titles (days or years)."""
     t = float(time_days)
-    if abs(t) >= 365.25 and abs(t % 365.25) < 1e-6:
-        years = t / 365.25
+    if abs(t) >= 365.0 and abs(t % 365.0) < 1e-6:
+        years = t / 365.0
         return f"{years:g} y"
     if abs(t - round(t)) < 1e-9:
         return f"{round(t):g} d"

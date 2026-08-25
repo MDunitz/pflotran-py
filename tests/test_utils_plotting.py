@@ -66,8 +66,8 @@ def test_create_multi_variable_plot_uses_simulation_time_labels(sample_df):
 
 
 def test_format_time_label_years():
-    assert plotting.format_time_label(365.25) == "1 y"
-    assert plotting.format_time_label(730.5) == "2 y"
+    assert plotting.format_time_label(365.0) == "1 y"
+    assert plotting.format_time_label(730.0) == "2 y"
     assert plotting.format_time_label(5.0) == "5 d"
 
 

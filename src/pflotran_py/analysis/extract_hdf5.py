@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 # like "Free_CH4(aq) [M]" / "Total_CO2(aq) [M]". The Coordinates group stores
 # grid *edges* (length n+1 per axis); cell centers are the edge midpoints.
 #
+# Axis-order assumption: cell datasets are shaped (nx, ny, nz) and pair with
+# meshgrid(..., indexing="ij") so data[i,j,k] maps to (xc[i], yc[j], zc[k]).
+# Cubic grids cannot catch a transpose via shape alone; see
+# tests/test_extract_hdf5.py::test_extract_hdf5_axis_order_non_cubic.
+#
 # To stay drop-in compatible with the Tecplot extractor, variable names are
 # normalized to the Tecplot spelling: the "Free_" / "Total_" prefix underscore
 # becomes a space (e.g. "Free_CH4(aq) [M]" -> "Free CH4(aq) [M]").

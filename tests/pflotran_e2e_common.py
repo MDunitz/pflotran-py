@@ -156,18 +156,8 @@ def _fortran_float(token):
     return float(re.sub(r"[dD]", "e", token))
 
 
-_TIME_UNIT_DAYS = {
-    "s": 1.0 / 86400.0,
-    "sec": 1.0 / 86400.0,
-    "m": 1.0 / 1440.0,
-    "min": 1.0 / 1440.0,
-    "h": 1.0 / 24.0,
-    "hr": 1.0 / 24.0,
-    "d": 1.0,
-    "day": 1.0,
-    "y": 365.25,
-    "yr": 365.25,
-}
+# Keep deck-time parsing aligned with extractor conversions (PFLOTRAN: 365 d/y).
+_TIME_UNIT_DAYS = columns.TIME_UNIT_TO_DAYS
 
 
 def parse_grid_cells(deck_path):
