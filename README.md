@@ -13,9 +13,12 @@ Simulation of microbial redox networks (methanogenesis, sulfate reduction, iron 
 ├── src/pflotran_py/          ← Installable package
 │   ├── generator/            ← Python code to produce PFLOTRAN .in files
 │   │                           (including bottle_generator.py, closed-batch decks)
+│   │                           constants.py: AWINHIBIT a_crit / inhibition type
 │   ├── analysis/             ← Post-PFLOTRAN compute (extract, gradients, transforms)
+│   │                           constants.py: diffusion coefficients, water viscosity
 │   ├── comparison/           ← Model vs. measured laboratory incubations
-│   └── visualization/        ← Presentation (Bokeh / Plotly rendering)
+│   ├── visualization/        ← Presentation (Bokeh / Plotly rendering)
+│   └── config.py             ← Pipeline knobs (species map, temperature, output paths)
 ├── batch/                    ← Batch file generation + inhibition diagnostics
 ├── sample_data/              ← Example PFLOTRAN Tecplot output files
 ├── reference/                ← Historical/reference input decks
@@ -277,10 +280,23 @@ gen.generate('simulation.in')
 ```
 
 Key files:
+- `constants.py` — Deck defaults with citations: AWINHIBIT `a_crit` per pathway (`AW_CRIT_*`) and `AW_INHIBITION_TYPE`
 - `pflotran_generator.py` — Generator class with configurable rate constants, half-saturations, inhibition thresholds, grid presets (1D/2D/3D)
 - `pflotran_templates.py` — Static PFLOTRAN input blocks (17 primary species, 62 secondary, 5 gas, 3 mineral)
 - `REFERENCES.md` — Full citations for all rate constants and parameters
 - `9_addnitrogen_example.in` — Example generated output
+
+### Where constants live
+
+Three files named `constants.py`; they are not interchangeable:
+
+| File | What it holds |
+|------|----------------|
+| `src/pflotran_py/generator/constants.py` | Deck-generator kinetic defaults written into `.in` files: pathway `a_crit` (Oren 1999/2011) and `ONE_MINUS_AW`. CLI flags and `PFLOTRANGenerator` import from here. |
+| `src/pflotran_py/analysis/constants.py` | Post-processing physics: Boudreau 25 °C diffusion coefficients, Vogel water viscosity, unit-conversion factors. Used by the visualization physics layer, not by deck generation. |
+| `exploratory/constants.py` | Notebook/unit-conversion leftovers (molar mass of C, sample volume, time factors). Exploratory only; the package does not import it. |
+
+Pipeline settings that are not literature constants (species map, default temperature, output paths) live in `src/pflotran_py/config.py`.
 
 ### sandbox/
 
@@ -411,7 +427,7 @@ Sanskriti's exploratory PFLOTRAN work, covering iterative input deck development
 - `long_term_isq/` -- Streamlit dashboard for ISQ gas concentration data (CH4, CO2, H2S) across experimental conditions (methanogen, spirulina, mix). Includes CSV datasets and interactive plotting.
 - `CCS_LT.in` + `ccs_lt.grdecl` -- Long-term (100-year) CO2 capture and sequestration input deck with Eclipse grid.
 - `pflotran_vars.py` -- PFLOTRAN variable definitions and parameter sets.
-- `constants.py` -- Unit conversion constants (molar masses, time conversions).
+- `constants.py` -- Exploratory unit conversions (molar mass of C, sample volume, time factors). Not imported by the installable package; see `src/pflotran_py/generator/constants.py` and `analysis/constants.py` for those.
 - Notebooks: water activity curves, 100-year linear/exponential projection models.
 
 ---
@@ -559,9 +575,11 @@ network Monod rate law (same rate constant, half-saturations, and O₂/Fe/H⁺
 inhibition) and multiplies by an a_w smoothstep. The network's three
 methane-producing `MICROBIAL_REACTION` blocks are omitted so the two do not
 double-produce methane. Comparison decks therefore use `--no-cl-inhibition`
-and `--aw-inhibition-type ONE_MINUS_AW --aw-threshold 0.80` (continuous
-`(a_w − a_crit)/(1 − a_crit)` across the measured range; not a methane
-fit), and pass each batch's **meter-read** water activity as
+and `--aw-inhibition-type ONE_MINUS_AW` with pathway-specific
+`a_crit` from `pflotran_py.generator.constants` (hydrogenotrophic 0.80,
+methylotrophic 0.85, acetoclastic 0.90 — acetoclasts fail first under salt;
+Oren 1999/2011, not a methane fit),
+and pass each batch's **meter-read** water activity as
 `FIXED_WATER_ACTIVITY`. PHREEQC/`pitzer.dat` a_w computed from the weighed
 recipe is an independent oracle, not the default inhibition input: it is
 near-exact for 1:1 NaCl and ~0.02 high for the Mg brines, so feeding it in
@@ -580,7 +598,8 @@ python -m pflotran_py.comparison.brines --output data/incubation_batch_compositi
 #    Cl- Monod is off so salt is not double-counted.
 python -m pflotran_py.comparison.decks --output-dir decks \
     --cellulose-hydrolysis --no-cl-inhibition \
-    --aw-inhibition-type ONE_MINUS_AW --aw-threshold 0.80
+    --aw-inhibition-type ONE_MINUS_AW \
+    --aw-threshold 0.80 --aw-threshold-methyl 0.85 --aw-threshold-acetate 0.90
 
 # 3. Run them (needs the container image built; see Running PFLOTRAN above).
 python -m pflotran_py.comparison.run_decks --run-root runs --clean
@@ -913,7 +932,7 @@ Adapt paths below if your clone location differs from the defaults.
 
 ### Regenerating the main input file with different constants
 
-Navigate to `generator/`. Change the constants you want using the dictionaries at the top of `pflotran_generator.py`. Default output is `.tec` files. Follow the comments in the generator if you want HDF5 output (recommended for multi-salinity runs).
+Navigate to `src/pflotran_py/generator/`. Pathway a_w defaults are in `constants.py`. Change other kinetic values using the dictionaries at the top of `pflotran_generator.py`. Default output is `.tec` files. Follow the comments in the generator if you want HDF5 output (recommended for multi-salinity runs).
 
 ### Generating files with different salt concentrations
 
