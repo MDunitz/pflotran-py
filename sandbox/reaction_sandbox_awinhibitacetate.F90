@@ -14,6 +14,8 @@ module Reaction_Sandbox_AWInhibitAcetate_class
   PetscInt, parameter :: AWINHIBITACETATE_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBITACETATE_SMOOTHSTEP_INHIBITION = 2
   PetscInt, parameter :: AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION = 3
+  ! Match generator.constants.AW_SMOOTHSTEP_INTERVAL (keep in sync by hand).
+  PetscReal, parameter :: AW_SMOOTHSTEP_INTERVAL = 0.20d0
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitacetate_type
@@ -64,9 +66,10 @@ function AWInhibitAcetateCreate()
   allocate(AWInhibitAcetateCreate)
 
   ! Default a_crit matches generator.constants AW_CRIT_ACETOCLASTIC (0.90).
-  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  ! Default shape matches AW_INHIBITION_TYPE (ONE_MINUS_AW). Deck keywords
+  ! WATER_ACTIVITY_THRESHOLD / INHIBITION_TYPE override when present.
   AWInhibitAcetateCreate%aw_threshold = 0.90d0
-  AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_SMOOTHSTEP_INHIBITION
+  AWInhibitAcetateCreate%inhibition_type = AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION
   AWInhibitAcetateCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
   AWInhibitAcetateCreate%rate_constant = UNINITIALIZED_DOUBLE
@@ -316,8 +319,10 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
   select case(this%inhibition_type)
     case(AWINHIBITACETATE_SMOOTHSTEP_INHIBITION)
       ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
+      ! Interval from AW_SMOOTHSTEP_INTERVAL (see generator.constants).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.20d0, aw_inhibition, tempreal)
+                                        AW_SMOOTHSTEP_INTERVAL, aw_inhibition, &
+                                        tempreal)
     case(AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION)
       if (this%aw_threshold >= 1.d0) then
         aw_inhibition = 1.d0

@@ -92,3 +92,11 @@ AW_CRIT_ACETOCLASTIC = 0.90
 # Shared CLI / constructor alias: hydrogenotrophic is the fallback when a
 # pathway-specific a_crit is omitted.
 AW_THRESHOLD = AW_CRIT_HYDROGENOTROPHIC
+
+# SMOOTHSTEP width in log10(a_w) decades, used only when
+# INHIBITION_TYPE is SMOOTHSTEP (not the comparison default). Mirrored as
+# AW_SMOOTHSTEP_INTERVAL in sandbox/reaction_sandbox_awinhibit*.F90 — Fortran
+# cannot import this module, so keep the two values in sync by hand.
+# Chosen wider than the historical 0.05 cliff (~0.90–1.00) so the factor
+# spans roughly a_w 0.75–1.2 around a ~0.95 centre; not a methane fit.
+AW_SMOOTHSTEP_INTERVAL = 0.20

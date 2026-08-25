@@ -17,6 +17,8 @@ module Reaction_Sandbox_AWInhibit_class
   ! with a_crit = WATER_ACTIVITY_THRESHOLD. Spans the measured a_w range rather
   ! than a ~0.1-wide log10 smoothstep cliff.
   PetscInt, parameter :: AWINHIBIT_ONE_MINUS_AW_INHIBITION = 3
+  ! Match generator.constants.AW_SMOOTHSTEP_INTERVAL (keep in sync by hand).
+  PetscReal, parameter :: AW_SMOOTHSTEP_INTERVAL = 0.20d0
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibit_type
@@ -72,9 +74,10 @@ function AWInhibitCreate()
   allocate(AWInhibitCreate)
 
   ! Default a_crit matches generator.constants AW_CRIT_HYDROGENOTROPHIC (0.80).
-  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  ! Default shape matches AW_INHIBITION_TYPE (ONE_MINUS_AW). Deck keywords
+  ! WATER_ACTIVITY_THRESHOLD / INHIBITION_TYPE override when present.
   AWInhibitCreate%aw_threshold = 0.80d0
-  AWInhibitCreate%inhibition_type = AWINHIBIT_SMOOTHSTEP_INHIBITION
+  AWInhibitCreate%inhibition_type = AWINHIBIT_ONE_MINUS_AW_INHIBITION
   ! UNINITIALIZED => use PFLOTRAN ln_act_h2o; set FIXED_WATER_ACTIVITY to
   ! override with an external (e.g. Pitzer) value for closed-batch decks.
   AWInhibitCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
@@ -344,10 +347,10 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
       ! Positive threshold => INHIBIT_BELOW polarity: factor -> 1 as a_w rises
       ! above the threshold (rate on when wet). Do not invert -- the old
       ! 1-factor flipped that and made salt *increase* methane.
-      ! Interval 0.20 (log10) spans roughly a_w 0.75-1.2 around a 0.95 centre,
-      ! wider than the historical 0.05 cliff (~0.90-1.00).
+      ! Interval from AW_SMOOTHSTEP_INTERVAL (see generator.constants).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.20d0, aw_inhibition, tempreal)
+                                        AW_SMOOTHSTEP_INTERVAL, aw_inhibition, &
+                                        tempreal)
     case(AWINHIBIT_ONE_MINUS_AW_INHIBITION)
       ! Compatible-solute / turgor cost rises with (1 - a_w). Linear map from
       ! a_crit (rate zero) to a_w = 1 (rate uninhibited).

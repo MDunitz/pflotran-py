@@ -14,6 +14,8 @@ module Reaction_Sandbox_AWInhibitMethyl_class
   PetscInt, parameter :: AWINHIBITMETHYL_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION = 2
   PetscInt, parameter :: AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION = 3
+  ! Match generator.constants.AW_SMOOTHSTEP_INTERVAL (keep in sync by hand).
+  PetscReal, parameter :: AW_SMOOTHSTEP_INTERVAL = 0.20d0
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitmethyl_type
@@ -60,9 +62,10 @@ function AWInhibitMethylCreate()
   allocate(AWInhibitMethylCreate)
 
   ! Default a_crit matches generator.constants AW_CRIT_METHYLOTROPHIC (0.85).
-  ! Deck WATER_ACTIVITY_THRESHOLD overrides this when present.
+  ! Default shape matches AW_INHIBITION_TYPE (ONE_MINUS_AW). Deck keywords
+  ! WATER_ACTIVITY_THRESHOLD / INHIBITION_TYPE override when present.
   AWInhibitMethylCreate%aw_threshold = 0.85d0
-  AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION
+  AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION
   AWInhibitMethylCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
 
   AWInhibitMethylCreate%rate_constant = UNINITIALIZED_DOUBLE
@@ -293,8 +296,10 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
   select case(this%inhibition_type)
     case(AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION)
       ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
+      ! Interval from AW_SMOOTHSTEP_INTERVAL (see generator.constants).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.20d0, aw_inhibition, tempreal)
+                                        AW_SMOOTHSTEP_INTERVAL, aw_inhibition, &
+                                        tempreal)
     case(AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION)
       if (this%aw_threshold >= 1.d0) then
         aw_inhibition = 1.d0
