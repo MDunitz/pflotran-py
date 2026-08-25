@@ -1,5 +1,12 @@
 """Fit on the early timepoints of an incubation, then predict the rest of it.
 
+RETIRED FROM THE DEFAULT COMPARISON
+-----------------------------------
+This module fits the same chloride smoothstep as :mod:`calibrate`. That term is
+no longer on the live Exp003/Exp004 comparison path (AWINHIBIT sandboxes own
+salt stress there). Kept for historical mid-experiment forecast replay; not a
+current default. See the README and ``inhibition_diagnostic``.
+
 A different question from the one :mod:`calibrate` asks. That module fits on one
 experiment and applies the result to another, which tests whether parameters
 transfer across salt chemistry. This one stays inside a single experiment and
@@ -554,7 +561,10 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Fit the salinity inhibition on early sampling rounds, predict the rest."
+        description=(
+            "RETIRED from the default comparison. Fit the Cl- smoothstep on early "
+            "sampling rounds, then predict the rest (historical replay)."
+        )
     )
     parser.add_argument("--work-root", default="forecasting")
     parser.add_argument("--repo-root", default=os.getcwd())
@@ -575,6 +585,10 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    print(
+        "NOTE: forecast is RETIRED from the default comparison "
+        "(Cl- smoothstep fit; live path uses AWINHIBIT). Historical replay only.\n"
+    )
 
     table = (
         pd.read_csv(args.composition)

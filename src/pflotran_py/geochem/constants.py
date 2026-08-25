@@ -98,7 +98,7 @@ SEA_SALT_ION_MASS_FRACTION = {
 }
 
 # ═════════════════════════════════════════════════════════════════════
-# Hand-rolled binary NaCl Pitzer parameters (legacy a_w <-> molality invert)
+# LEGACY: binary NaCl Pitzer (optional a_w ↔ molality invert only)
 # ═════════════════════════════════════════════════════════════════════
 #
 # Only ``generator.bottle_generator`` uses these today, for the optional

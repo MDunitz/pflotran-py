@@ -266,11 +266,13 @@ Use one of the test files in `reference/` to verify installation. You will also 
 `PFLOTRANGenerator` produces complete `.in` files via a kwargs interface:
 
 ```python
-from pflotran_generator import PFLOTRANGenerator
+from pflotran_py.generator import PFLOTRANGenerator
+from pflotran_py.generator.constants import AW_CRIT_HYDROGENOTROPHIC
 
 gen = PFLOTRANGenerator(
     concentrations={'Cl-': '2.68 Z', 'Na+': '2.295 T'},
-    aw_threshold=0.6,
+    # Defaults are AW_CRIT_* (H 0.80 / M 0.85 / A 0.90); shown explicitly here.
+    aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
     dimensions='1d',        # '1d' | '2d' | '3d'
     temperature=8.0,
     enable_cl_inhibition=True,
@@ -739,9 +741,10 @@ against it. Its panel in the parity figure is a parameter-free prediction,
 though an indirect one: the hydrolysis rate and the methane inhibition both
 change how carbon is routed.
 
-### Fitting on one experiment and testing on the other
+### Fitting on one experiment and testing on the other (RETIRED)
 
 ```bash
+# Historical Cl- smoothstep protocol only — not the live comparison path.
 python -m pflotran_py.comparison.calibrate
 ```
 

@@ -5,9 +5,12 @@ Generates .in files for PFLOTRAN reactive transport simulations of
 microbial redox networks in saline environments.
 
 Usage:
+    from pflotran_py.generator.constants import AW_CRIT_HYDROGENOTROPHIC
+
     generator = PFLOTRANGenerator(
         concentrations={'Cl-': '2.68 T', 'Na+': '2.295 T'},
-        aw_threshold=0.6,
+        # Defaults are AW_CRIT_* from generator.constants (H 0.80 / M 0.85 / A 0.90).
+        aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
         dimensions='1d',
     )
     generator.generate('my_simulation.in')

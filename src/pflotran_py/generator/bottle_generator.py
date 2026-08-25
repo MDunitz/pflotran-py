@@ -76,6 +76,7 @@ import math
 import os
 
 from ..geochem.constants import (
+    MOLAR_MASS_G_PER_MOL,
     NACL_BETA0,
     NACL_BETA1,
     NACL_CPHI,
@@ -106,16 +107,19 @@ from .pflotran_generator import PFLOTRANGenerator
 _VIAL_EDGE_M = (VIAL_VOLUME_L * 1e-3) ** (1.0 / 3.0)
 
 # ═════════════════════════════════════════════════════════════════════
-# Water activity <-> NaCl molality
+# LEGACY: water activity <-> NaCl molality (thought-experiment decks)
 # ═════════════════════════════════════════════════════════════════════
+#
+# Not used by the Exp003/Exp004 comparison, which sets FIXED_WATER_ACTIVITY
+# from the meter (or optional PHREEQC a_w) and dissolves the measured brine.
 #
 # The AWINHIBIT sandboxes do not take water activity as an input. PFLOTRAN
 # computes water activity from the solution composition at each timestep (the
 # deck switches this on with ACTIVITY_WATER). So to build a deck that sits at a
-# particular water activity, we have to work backwards from the measured water
-# activity to a salt concentration that produces it.
+# particular water activity without a measured recipe, we can work backwards
+# from a target a_w to a pure-NaCl concentration.
 #
-# The conversion below is a starting estimate, not the answer. It assumes a pure
+# That conversion is a starting estimate, not the answer. It assumes a pure
 # NaCl solution at 25 C, whereas the real batches contain NaCl, MgCl2 and sea
 # salt at 18 C. After a run completes, the water activity PFLOTRAN actually
 # computed should be read back out of the output and compared against the
@@ -263,10 +267,11 @@ def nacl_brine(molality=None, water_activity=None):
         molality = nacl_molality_for_water_activity(water_activity)
 
     # Take one kilogram of water as the basis. Adding m moles of NaCl at
-    # 58.44 g/mol gives a solution of known mass; dividing by its density gives
-    # its volume; the salt's molarity is then m moles in that volume.
+    # MOLAR_MASS_G_PER_MOL["NaCl"] gives a solution of known mass; dividing by
+    # its density gives its volume; the salt's molarity is then m moles in that
+    # volume.
     solution_density_kg_per_l = (1000.0 + 40.0 * molality) / 1000.0
-    solution_mass_kg = 1.0 + molality * 58.44 / 1000.0
+    solution_mass_kg = 1.0 + molality * MOLAR_MASS_G_PER_MOL["NaCl"] / 1000.0
     solution_volume_l = solution_mass_kg / solution_density_kg_per_l
     molarity = molality / solution_volume_l
 

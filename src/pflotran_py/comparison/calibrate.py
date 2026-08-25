@@ -1,5 +1,14 @@
 """Fit the salinity inhibition on one experiment and test it on another.
 
+RETIRED FROM THE DEFAULT COMPARISON
+-----------------------------------
+This module fits a chloride smoothstep (``salinity_inhibition``) that the live
+Exp003/Exp004 comparison no longer uses. Salt stress there is owned by the
+AWINHIBIT sandboxes (meter a_w × ``AW_CRIT_*``). Keep this file for historical
+replay and attribution; do not treat its grids or winners as current science
+defaults. See ``inhibition_diagnostic`` and the README "What the comparison
+currently shows" section.
+
 Two parameters of the salinity inhibition term -- the chloride concentration at
 which it centres, and the width of the transition -- have no independent source.
 They were chosen by comparing modelled methane against measured methane, which
@@ -174,8 +183,8 @@ def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Fit the salinity inhibition on one experiment, then apply it to a "
-            "held-out one."
+            "RETIRED from the default comparison. Fit the Cl- smoothstep on one "
+            "experiment, then apply it to a held-out one (historical replay)."
         )
     )
     parser.add_argument("--work-root", default="calibration")
@@ -193,6 +202,10 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    print(
+        "NOTE: calibrate is RETIRED from the default comparison "
+        "(Cl- smoothstep fit; live path uses AWINHIBIT). Historical replay only.\n"
+    )
 
     table = (
         pd.read_csv(args.composition)

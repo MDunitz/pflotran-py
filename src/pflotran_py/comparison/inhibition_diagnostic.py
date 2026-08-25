@@ -51,6 +51,7 @@ import numpy as np
 import pandas as pd
 
 from ..generator.bottle_generator import BOTTLE_FINAL_TIME_DAYS
+from ..generator.constants import AW_CRIT_HYDROGENOTROPHIC
 from .carbon_inventory import default_comparison_starting_carbon_moles
 from .decks import deck_filename, generate_decks_from_batch_table
 from .run_decks import run_deck
@@ -170,7 +171,8 @@ def generate_variant_decks(
     deck_root,
     *,
     final_time_days=BOTTLE_FINAL_TIME_DAYS,
-    aw_threshold=0.5,
+    # Match comparison decks (generator.constants), not the old 0.5 diagnostic.
+    aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
     **kwargs,
 ):
     """Build one deck per batch for a single variant."""
@@ -650,7 +652,15 @@ def main():
     parser.add_argument(
         "--final-time-days", type=int, default=BOTTLE_FINAL_TIME_DAYS
     )
-    parser.add_argument("--aw-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--aw-threshold",
+        type=float,
+        default=AW_CRIT_HYDROGENOTROPHIC,
+        help=(
+            "AWINHIBIT a_crit fallback (default: AW_CRIT_HYDROGENOTROPHIC from "
+            "generator.constants; same as the comparison decks)."
+        ),
+    )
     parser.add_argument(
         "--salinity-threshold", type=float, default=FITTED_SALINITY_THRESHOLD
     )
