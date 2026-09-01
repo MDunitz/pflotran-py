@@ -23,11 +23,14 @@ def split_forecast_days(
     fit_rounds,
     holdout_early_days=0,
     exclude_day_zero=EXCLUDE_DAY_ZERO,
+    anchor_day=0,
 ):
     """Partition sampling days into fit, predict, and early-holdout windows."""
     production_days = sorted(set(days))
     if exclude_day_zero:
         production_days = [day for day in production_days if day > 0]
+    if anchor_day > 0:
+        production_days = [day for day in production_days if day > anchor_day]
 
     if holdout_early_days > 0:
         early_holdout_days = [
@@ -59,19 +62,31 @@ def window_label(day, fit_days, predict_days, early_holdout_days):
 
 
 def forecast_output_dir(
-    output_root, experiment, fit_rounds, holdout_early_days, score_flux=False
+    output_root,
+    experiment,
+    fit_rounds,
+    holdout_early_days,
+    score_flux=False,
+    anchor_day=0,
 ):
     """Stable folder name for one forecast configuration."""
     flux_tag = "_flux" if score_flux else ""
+    anchor_tag = f"_anchor-{int(anchor_day)}d" if anchor_day > 0 else ""
     if holdout_early_days > 0:
         return os.path.join(
             output_root,
-            f"{experiment}_holdout-{int(holdout_early_days)}d{flux_tag}_"
+            f"{experiment}_holdout-{int(holdout_early_days)}d{flux_tag}{anchor_tag}_"
             f"fit-first-{fit_rounds}-rounds",
         )
-    if score_flux:
+    if score_flux or anchor_day > 0:
+        tags = []
+        if score_flux:
+            tags.append("flux")
+        if anchor_day > 0:
+            tags.append(f"anchor-{int(anchor_day)}d")
         return os.path.join(
-            output_root, f"{experiment}_flux_fit-first-{fit_rounds}-rounds"
+            output_root,
+            f"{experiment}_{'_'.join(tags)}_fit-first-{fit_rounds}-rounds",
         )
     return os.path.join(output_root, f"{experiment}_fit-first-{fit_rounds}-rounds")
 

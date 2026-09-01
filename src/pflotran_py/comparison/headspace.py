@@ -463,6 +463,29 @@ def model_headspace_moles(
     )
 
 
+def headspace_moles_to_aqueous_concentration(
+    headspace_moles,
+    gas,
+    bottle=DEFAULT_BOTTLE,
+    temperature=DEFAULT_TEMPERATURE,
+    nacl_molarity=0.0,
+    mgcl2_molarity=0.0,
+):
+    """Aqueous concentration in Henry equilibrium with a headspace sample.
+
+  Inverse of :func:`aqueous_concentration_to_headspace_moles`. Used when measured
+  headspace gas is written into a PFLOTRAN initial constraint.
+    """
+    if not isinstance(headspace_moles, u.Quantity):
+        headspace_moles = headspace_moles * u.mol
+    partition = gas_water_partition_coefficient(
+        gas, temperature, nacl_molarity, mgcl2_molarity
+    )
+    return (
+        headspace_moles / (partition * bottle.headspace_volume.to(u.L))
+    ).to(u.mol / u.L)
+
+
 def headspace_moles_to_total_moles(
     headspace_moles,
     gas,

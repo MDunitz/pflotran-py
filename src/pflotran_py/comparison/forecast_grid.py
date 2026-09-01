@@ -11,9 +11,11 @@ from ..generator.constants import (
     AW_CRIT_HYDROGENOTROPHIC,
     AW_CRIT_METHYLOTROPHIC,
     AW_INHIBITION_TYPE,
+    BOTTLE_FINAL_TIME_DAYS,
 )
 from .decks import generate_deck_for_batch
 from .figures import load_model_run, model_methane_headspace
+from .forecast_anchor import anchor_final_time_days, anchor_table
 from .run_decks import run_deck
 
 # Hydrogenotrophic a_crit values to sweep. Methyl and acetoclastic thresholds
@@ -70,10 +72,38 @@ def model_at_days(days_model, moles_model, wanted_days):
     return np.interp(wanted_days, days_model, moles_model)
 
 
-def run_grid(batches, work_root, repo_root, tag_prefix, aw_threshold_grid=None):
+def run_grid(
+    batches,
+    work_root,
+    repo_root,
+    tag_prefix,
+    aw_threshold_grid=None,
+    anchor_day=0,
+    measured_ch4=None,
+    measured_co2=None,
+):
     """Run every AWINHIBIT parameter combination once, for every batch."""
     if aw_threshold_grid is None:
         aw_threshold_grid = AW_THRESHOLD_GRID
+
+    anchor_lookup = {}
+    final_time_days = BOTTLE_FINAL_TIME_DAYS
+    if anchor_day > 0:
+        if measured_ch4 is None or measured_co2 is None:
+            raise ValueError(
+                "measured_ch4 and measured_co2 are required when anchor_day > 0"
+            )
+        anchors = anchor_table(measured_ch4, measured_co2, batches, anchor_day)
+        anchor_lookup = {
+            int(row["Batch ID"]): row["concentrations"]
+            for _, row in anchors.iterrows()
+        }
+        if not anchor_lookup:
+            raise ValueError(
+                f"no batches with positive CH4 and CO2 headspace at anchor day "
+                f"{anchor_day}"
+            )
+        final_time_days = anchor_final_time_days(anchor_day)
 
     grid = {}
     for aw_h2 in aw_threshold_grid:
@@ -81,17 +111,27 @@ def run_grid(batches, work_root, repo_root, tag_prefix, aw_threshold_grid=None):
         tag = aw_grid_tag(aw_h2, aw_methyl, aw_acetate)
         series = {}
         for _, batch in batches.iterrows():
+            batch_id = int(batch["Batch ID"])
+            if anchor_day > 0 and batch_id not in anchor_lookup:
+                continue
             name = (
-                f"{batch['Experiment']}_B{int(batch['Batch ID']):02d}"
+                f"{batch['Experiment']}_B{batch_id:02d}"
                 f"_{batch['Brine Name']}"
             )
             deck_dir = os.path.join(work_root, f"{tag_prefix}_decks_{tag}")
             run_root = os.path.join(work_root, f"{tag_prefix}_runs_{tag}")
+            deck_kwargs = forecast_deck_kwargs(aw_h2, aw_methyl, aw_acetate)
+            if anchor_day > 0:
+                deck_kwargs = {
+                    **deck_kwargs,
+                    "concentrations": anchor_lookup[batch_id],
+                }
             with contextlib.redirect_stdout(io.StringIO()):
                 deck = generate_deck_for_batch(
                     batch,
                     output_dir=deck_dir,
-                    **forecast_deck_kwargs(aw_h2, aw_methyl, aw_acetate),
+                    final_time_days=final_time_days,
+                    **deck_kwargs,
                 )
             target = os.path.join(deck_dir, f"{name}.in")
             if deck != target:
@@ -103,6 +143,6 @@ def run_grid(batches, work_root, repo_root, tag_prefix, aw_threshold_grid=None):
             frame = load_model_run(result["workdir"])
             if frame is None:
                 continue
-            series[int(batch["Batch ID"])] = model_methane_headspace(frame, batch)
+            series[batch_id] = model_methane_headspace(frame, batch)
         grid[(aw_h2, aw_methyl, aw_acetate)] = series
     return grid

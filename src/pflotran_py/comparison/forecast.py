@@ -42,6 +42,11 @@ from .forecast_grid import (  # noqa: E402
     pathway_aw_thresholds,
     run_grid,
 )
+from .forecast_anchor import (  # noqa: E402
+    DEFAULT_ANCHOR_DAY,
+    anchor_table,
+    model_days_to_physical,
+)
 from .forecast_scoring import (  # noqa: E402
     observed_by_batch,
     score_flux_window,
@@ -67,6 +72,7 @@ EXPERIMENTS = ("Exp003", "Exp004")
 # Re-exported for tests and callers that imported from this module.
 __all__ = [
     "AW_THRESHOLD_GRID",
+    "DEFAULT_ANCHOR_DAY",
     "DEFAULT_FIT_ROUNDS",
     "DEFAULT_FLUX_SKIP_DAYS",
     "DEFAULT_HOLDOUT_EARLY_DAYS",
@@ -100,9 +106,19 @@ def plot_forecast(
     output_path,
     early_holdout_days=(),
     holdout_early_days=0,
+    anchor_day=0,
 ):
     """Timecourse with the fitting window shaded and the rest left to predict."""
     figure, axis = plt.subplots(figsize=(11, 6.8))
+
+    if anchor_day > 0:
+        axis.axvline(
+            anchor_day,
+            color=PALETTE["guide"],
+            linewidth=1.0,
+            linestyle=":",
+            zorder=1,
+        )
 
     if early_holdout_days:
         axis.axvspan(
@@ -130,6 +146,8 @@ def plot_forecast(
             continue
         colour = colour_for_brine(batch["Brine Name"])
         model_days, model_moles = series[batch_id]
+        if anchor_day > 0:
+            model_days = model_days_to_physical(model_days, anchor_day)
         axis.plot(
             model_days, model_moles, color=colour, linewidth=2, alpha=0.9, zorder=2
         )
@@ -189,9 +207,14 @@ def plot_forecast(
         if holdout_early_days > 0
         else ""
     )
+    anchor_note = (
+        f", warm-started at day {int(anchor_day)} from measured CH4 and CO2"
+        if anchor_day > 0
+        else ""
+    )
     axis.set_title(
         f"{experiment}: parameters fitted on the first {len(fit_days)} eligible "
-        f"sampling rounds{holdout_note}, then asked to predict the rest\n"
+        f"sampling rounds{holdout_note}{anchor_note}, then asked to predict the rest\n"
         f"ONE_MINUS_AW a_crit: H2={aw_threshold:.2f}, methyl={aw_threshold_methyl:.2f}, "
         f"acetate={aw_threshold_acetate:.2f}   |   "
         f"fitted {fit_score:.2f}, predicted {predict_score:.2f}",
@@ -301,6 +324,8 @@ def forecast_experiment(
     aw_threshold_grid=None,
     score_flux=False,
     flux_skip_days=DEFAULT_FLUX_SKIP_DAYS,
+    anchor_day=0,
+    measured_co2=None,
 ):
     """Fit on the early sampling rounds of one experiment, predict the rest."""
     batches = table[table["Experiment"] == experiment]
@@ -310,11 +335,13 @@ def forecast_experiment(
         observed["day"].unique(),
         fit_rounds,
         holdout_early_days=holdout_early_days,
+        anchor_day=anchor_day,
     )
     if not fit_days:
         raise ValueError(
-            f"{experiment}: no sampling days left to fit after excluding day zero "
-            f"and the first {holdout_early_days} days"
+            f"{experiment}: no sampling days left to fit after excluding day zero"
+            + (f", anchor day {anchor_day}" if anchor_day else "")
+            + f", and the first {holdout_early_days} days"
         )
     if not predict_days:
         raise ValueError(
@@ -332,6 +359,11 @@ def forecast_experiment(
         f"{[int(day) for day in production_days]}"
     )
     print(f"{'=' * 76}")
+    if anchor_day > 0:
+        print(
+            f"  anchor day        {int(anchor_day)} "
+            "(decks warm-started from interpolated measured CH4 and CO2 headspace)"
+        )
     if early_holdout_days:
         print(
             f"  early holdout     {[int(day) for day in early_holdout_days]} "
@@ -378,24 +410,37 @@ def forecast_experiment(
         repo_root,
         tag_prefix=experiment,
         aw_threshold_grid=aw_threshold_grid,
+        anchor_day=anchor_day,
+        measured_ch4=measured if anchor_day > 0 else None,
+        measured_co2=measured_co2,
     )
 
     scored = []
     for (aw_h2, aw_methyl, aw_acetate), series in grid.items():
         if score_flux:
-            value, count = score_flux_window(series, observed, fit_flux_pairs)
+            value, count = score_flux_window(
+                series, observed, fit_flux_pairs, anchor_day=anchor_day
+            )
         else:
-            value, count = score_window(series, observed, fit_days)
+            value, count = score_window(
+                series, observed, fit_days, anchor_day=anchor_day
+            )
         scored.append((value, aw_h2, aw_methyl, aw_acetate, count))
     fit_score, aw_h2, aw_methyl, aw_acetate, fit_count = min(scored)
 
     if score_flux:
         predict_score, predict_count = score_flux_window(
-            grid[(aw_h2, aw_methyl, aw_acetate)], observed, predict_flux_pairs
+            grid[(aw_h2, aw_methyl, aw_acetate)],
+            observed,
+            predict_flux_pairs,
+            anchor_day=anchor_day,
         )
     else:
         predict_score, predict_count = score_window(
-            grid[(aw_h2, aw_methyl, aw_acetate)], observed, predict_days
+            grid[(aw_h2, aw_methyl, aw_acetate)],
+            observed,
+            predict_days,
+            anchor_day=anchor_day,
         )
 
     at_edge = []
@@ -422,9 +467,20 @@ def forecast_experiment(
         )
 
     directory = forecast_output_dir(
-        output_root, experiment, fit_rounds, holdout_early_days, score_flux=score_flux
+        output_root,
+        experiment,
+        fit_rounds,
+        holdout_early_days,
+        score_flux=score_flux,
+        anchor_day=anchor_day,
     )
     os.makedirs(directory, exist_ok=True)
+
+    if anchor_day > 0:
+        anchors = anchor_table(measured, measured_co2, batches, anchor_day)
+        anchors.drop(columns=["concentrations"]).to_csv(
+            os.path.join(directory, "anchor_initial.csv"), index=False
+        )
 
     figure_path = plot_forecast(
         experiment,
@@ -441,6 +497,7 @@ def forecast_experiment(
         os.path.join(directory, "methane_forecast.png"),
         early_holdout_days=early_holdout_days,
         holdout_early_days=holdout_early_days,
+        anchor_day=anchor_day,
     )
 
     pd.DataFrame(
@@ -460,11 +517,14 @@ def forecast_experiment(
 
     records = []
     for _, row in observed.iterrows():
+        if anchor_day > 0 and row["day"] <= anchor_day:
+            continue
         batch_id = int(row["Batch ID"])
         if batch_id not in grid[(aw_h2, aw_methyl, aw_acetate)]:
             continue
         model_days, model_moles = grid[(aw_h2, aw_methyl, aw_acetate)][batch_id]
-        modelled = float(model_at_days(model_days, model_moles, row["day"]))
+        sim_day = float(row["day"]) - float(anchor_day)
+        modelled = float(model_at_days(model_days, model_moles, sim_day))
         measured_value = float(row["Cumulative Moles"])
         records.append(
             {
@@ -496,8 +556,12 @@ def forecast_experiment(
                 if t0 not in batch_measured or t1 not in batch_measured:
                     continue
                 model_rate = interval_production_rate(
-                    model_at_days(model_days, model_moles, t0),
-                    model_at_days(model_days, model_moles, t1),
+                    model_at_days(
+                        model_days, model_moles, float(t0) - float(anchor_day)
+                    ),
+                    model_at_days(
+                        model_days, model_moles, float(t1) - float(anchor_day)
+                    ),
                     t0,
                     t1,
                 )
@@ -545,6 +609,7 @@ def forecast_experiment(
         "holdout early days": holdout_early_days,
         "score flux": score_flux,
         "flux skip days": flux_skip_days,
+        "anchor day": anchor_day,
     }
 
 
@@ -555,6 +620,7 @@ def write_protocol_note(
     holdout_early_days=0,
     score_flux=False,
     flux_skip_days=0,
+    anchor_day=0,
 ):
     """Leave an explanation beside the figures."""
     lines = [
@@ -577,6 +643,14 @@ def write_protocol_note(
             f"(mol/day) rather than cumulative moles. Intervals that start at or below "
             f"day {int(flux_skip_days)} were excluded so the trace-to-first-sample "
             "step-up does not dominate the fit.",
+            "",
+        ]
+    if anchor_day > 0:
+        lines += [
+            f"Decks were warm-started at day {int(anchor_day)} using measured headspace "
+            "CH4 and CO2 interpolated onto that day. Substrate and redox pools were "
+            "left at their default t=0 values, so this is a gas-anchored sensitivity "
+            "run rather than a full checkpoint restart.",
             "",
         ]
     lines += [
@@ -680,6 +754,7 @@ def write_protocol_note(
             if score_flux and flux_skip_days
             else ""
         )
+        + (f" --anchor-day {int(anchor_day)}" if anchor_day > 0 else "")
         + (
             f" --holdout-early-days {int(holdout_early_days)}`."
             if holdout_early_days > 0
@@ -756,7 +831,19 @@ def main():
             f"(default {DEFAULT_FLUX_SKIP_DAYS})"
         ),
     )
+    parser.add_argument(
+        "--anchor-day",
+        type=int,
+        default=0,
+        help=(
+            "warm-start decks from measured headspace CH4 and CO2 interpolated to "
+            f"this incubation day (0 disables; try {DEFAULT_ANCHOR_DAY})"
+        ),
+    )
     args = parser.parse_args()
+
+    if args.anchor_day < 0:
+        parser.error("--anchor-day must be non-negative")
 
     aw_threshold_grid = tuple(args.aw_threshold_grid or AW_THRESHOLD_GRID)
     for value in aw_threshold_grid:
@@ -770,9 +857,16 @@ def main():
     if args.score_flux:
         print(
             f"Objective: interval-averaged production rates, skipping intervals "
-            f"starting at or below day {args.flux_skip_days}.\n"
+            f"starting at or below day {args.flux_skip_days}."
         )
-    else:
+    if args.anchor_day > 0:
+        print(
+            f"Warm start: measured CH4 and CO2 headspace at day {args.anchor_day} "
+            "written into initial constraints."
+        )
+    if args.score_flux or args.anchor_day > 0:
+        print()
+    elif not args.score_flux:
         print()
 
     table = (
@@ -781,6 +875,9 @@ def main():
         else build_batch_table()
     )
     measured = load_measured(args.ecsv_glob, "CH4_FID")
+    measured_co2 = (
+        load_measured(args.ecsv_glob, "CO2") if args.anchor_day > 0 else None
+    )
     os.makedirs(args.output_root, exist_ok=True)
 
     summary = [
@@ -796,6 +893,8 @@ def main():
             aw_threshold_grid=aw_threshold_grid,
             score_flux=args.score_flux,
             flux_skip_days=args.flux_skip_days,
+            anchor_day=args.anchor_day,
+            measured_co2=measured_co2,
         )
         for experiment in EXPERIMENTS
     ]
@@ -807,6 +906,7 @@ def main():
         holdout_early_days=args.holdout_early_days,
         score_flux=args.score_flux,
         flux_skip_days=args.flux_skip_days,
+        anchor_day=args.anchor_day,
     )
     print()
     print("=" * 76)

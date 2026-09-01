@@ -54,6 +54,25 @@ def test_score_window_uses_only_requested_days():
     assert fit_score == pytest.approx(0.0)
 
 
+def test_score_window_respects_anchor_day():
+    observed = pd.DataFrame(
+        {
+            "Batch ID": [1, 1],
+            "day": [56, 91],
+            "Cumulative Moles": [1e-5, 1e-4],
+        }
+    )
+    grid_entry = {
+        1: (
+            np.array([0.0, 36.0, 71.0]),
+            np.array([1e-6, 1e-5, 1e-4]),
+        )
+    }
+    fit_score, count = score_window(grid_entry, observed, [56, 91], anchor_day=20)
+    assert count == 2
+    assert fit_score == pytest.approx(0.0)
+
+
 def test_score_flux_window_uses_interval_rates():
     observed = pd.DataFrame(
         {
