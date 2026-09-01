@@ -47,9 +47,65 @@ from ..generator.constants import (
     AW_CRIT_METHYLOTROPHIC,
     AW_INHIBITION_TYPE,
 )
+from ..generator.pflotran_generator import (
+    DEFAULT_CELLULOSE_HYDROLYSIS,
+    DEFAULT_RATE_CONSTANTS,
+)
 from .brines import to_pflotran_constraints
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_AW_THRESHOLD_FERMENTATION = 0.90
+DEFAULT_AW_THRESHOLD_HYDROLYSIS = 0.85
+
+
+def one_minus_aw_factor(water_activity, a_crit):
+    """Same factor as AWINHIBIT sandboxes: max(0, (a_w - a_crit) / (1 - a_crit))."""
+    a_w = float(water_activity)
+    crit = float(a_crit)
+    if crit >= 1.0:
+        return 1.0
+    if a_w <= crit:
+        return 0.0
+    return (a_w - crit) / (1.0 - crit)
+
+
+def _fortran_float(value):
+    """Parse a PFLOTRAN-style float string such as ``2.d-7``."""
+    return float(str(value).strip().lower().replace("d", "e"))
+
+
+def _to_fortran_rate(value):
+    """Emit a PFLOTRAN-friendly scientific literal."""
+    return f"{float(value):.1e}".replace("e", "d")
+
+
+def _apply_aw_upstream_inhibition(kwargs):
+    """Scale fermentation and cellulose hydrolysis by ONE_MINUS_AW on fixed a_w."""
+    fixed = kwargs.get("fixed_water_activity")
+    if fixed is None:
+        return kwargs
+
+    ferment_crit = kwargs.pop("aw_threshold_fermentation", DEFAULT_AW_THRESHOLD_FERMENTATION)
+    hydro_crit = kwargs.pop("aw_threshold_hydrolysis", DEFAULT_AW_THRESHOLD_HYDROLYSIS)
+    f_ferment = one_minus_aw_factor(fixed, ferment_crit)
+    f_hydro = one_minus_aw_factor(fixed, hydro_crit)
+
+    rates = dict(kwargs.get("rate_constants") or {})
+    base_ferment = rates.get("fermentation", DEFAULT_RATE_CONSTANTS["fermentation"])
+    rates["fermentation"] = base_ferment * f_ferment
+    kwargs["rate_constants"] = rates
+
+    if kwargs.get("cellulose_hydrolysis") is not None:
+        hydro = {
+            **DEFAULT_CELLULOSE_HYDROLYSIS,
+            **dict(kwargs["cellulose_hydrolysis"]),
+        }
+        base_hydro = _fortran_float(hydro["rate_constant"])
+        hydro["rate_constant"] = _to_fortran_rate(base_hydro * f_hydro)
+        kwargs["cellulose_hydrolysis"] = hydro
+
+    return kwargs
 
 
 def deck_filename(batch_row):
@@ -106,6 +162,14 @@ def generate_deck_for_batch(
                 f"Unknown water_activity_source {source!r}; "
                 "expected 'pitzer', 'measured', or 'pflotran'"
             )
+
+    aw_upstream = kwargs.pop("aw_upstream_inhibition", False)
+    if not aw_upstream:
+        kwargs.pop("aw_threshold_fermentation", None)
+        kwargs.pop("aw_threshold_hydrolysis", None)
+    else:
+        kwargs = _apply_aw_upstream_inhibition(kwargs)
+
     pitzer_aw = kwargs.get("fixed_water_activity")
     if pitzer_aw is not None:
         label = (

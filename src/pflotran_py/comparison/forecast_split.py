@@ -81,30 +81,35 @@ def forecast_output_dir(
     score_flux=False,
     anchor_day=0,
     run_stamp=None,
+    aw_upstream_inhibition=False,
+    multi_parameter_fit=False,
 ):
     """Stable folder name for one forecast configuration."""
     flux_tag = "_flux" if score_flux else ""
     anchor_tag = f"_anchor-{int(anchor_day)}d" if anchor_day > 0 else ""
+    upstream_tag = "_upstream" if aw_upstream_inhibition else ""
+    multidof_tag = "_multidof" if multi_parameter_fit else ""
     stamp_tag = f"_{run_stamp}" if run_stamp else ""
+    suffix = (
+        f"fit-first-{fit_rounds}-rounds{upstream_tag}{multidof_tag}{stamp_tag}"
+    )
     if holdout_early_days > 0:
         return os.path.join(
             output_root,
-            f"{experiment}_holdout-{int(holdout_early_days)}d{flux_tag}{anchor_tag}_"
-            f"fit-first-{fit_rounds}-rounds{stamp_tag}",
+            f"{experiment}_holdout-{int(holdout_early_days)}d"
+            f"{flux_tag}{anchor_tag}_{suffix}",
         )
-    if score_flux or anchor_day > 0:
+    if score_flux or anchor_day > 0 or aw_upstream_inhibition:
         tags = []
         if score_flux:
             tags.append("flux")
         if anchor_day > 0:
             tags.append(f"anchor-{int(anchor_day)}d")
-        return os.path.join(
-            output_root,
-            f"{experiment}_{'_'.join(tags)}_fit-first-{fit_rounds}-rounds{stamp_tag}",
-        )
-    return os.path.join(
-        output_root, f"{experiment}_fit-first-{fit_rounds}-rounds{stamp_tag}"
-    )
+        if aw_upstream_inhibition and not (score_flux or anchor_day > 0):
+            tags.append("upstream")
+        prefix = f"{experiment}_{'_'.join(tags)}_" if tags else f"{experiment}_"
+        return os.path.join(output_root, f"{prefix}{suffix}")
+    return os.path.join(output_root, f"{experiment}_{suffix}")
 
 
 def flux_interval_pairs(production_days, flux_skip_days):

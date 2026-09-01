@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from pflotran_py.comparison.decks import one_minus_aw_factor
 from pflotran_py.comparison.forecast_grid import (
     AW_THRESHOLD_GRID,
     forecast_deck_kwargs,
+    forecast_grid_points,
     pathway_aw_thresholds,
 )
 from pflotran_py.comparison.forecast_split import (
@@ -96,6 +98,11 @@ def test_pathway_aw_thresholds_match_live_defaults():
     assert (h2, methyl, acetate) == (0.80, 0.85, 0.90)
 
 
+def test_pathway_aw_thresholds_clamp_acetate():
+    h2, methyl, acetate = pathway_aw_thresholds(0.92, clamp_acetate=True)
+    assert (h2, methyl, acetate) == (0.92, 0.97, 1.0)
+
+
 @pytest.mark.parametrize("hydrogenotrophic", AW_THRESHOLD_GRID)
 def test_pathway_aw_thresholds_keep_ordering(hydrogenotrophic):
     h2, methyl, acetate = pathway_aw_thresholds(hydrogenotrophic)
@@ -110,3 +117,33 @@ def test_forecast_deck_kwargs_match_live_comparison():
     assert kwargs["aw_threshold"] == 0.80
     assert kwargs["aw_threshold_methyl"] == 0.85
     assert kwargs["aw_threshold_acetate"] == 0.90
+
+
+def test_forecast_deck_kwargs_upstream():
+    kwargs = forecast_deck_kwargs(
+        0.80,
+        0.85,
+        0.90,
+        aw_upstream_inhibition=True,
+        aw_threshold_fermentation=0.90,
+        aw_threshold_hydrolysis=0.85,
+    )
+    assert kwargs["aw_upstream_inhibition"] is True
+    assert kwargs["aw_threshold_fermentation"] == 0.90
+    assert kwargs["aw_threshold_hydrolysis"] == 0.85
+
+
+def test_forecast_grid_points_upstream_cartesian():
+    points = forecast_grid_points(
+        aw_threshold_grid=(0.80, 0.85),
+        aw_upstream_inhibition=True,
+        aw_fermentation_grid=(0.90, 0.95),
+        aw_hydrolysis_grid=(0.85,),
+    )
+    assert len(points) == 4
+    assert points[0] == (0.80, 0.85, 0.90, 0.90, 0.85)
+
+
+def test_one_minus_aw_factor_matches_sandbox():
+    assert one_minus_aw_factor(0.824, 0.90) == 0.0
+    assert one_minus_aw_factor(0.95, 0.90) == pytest.approx(0.5)
