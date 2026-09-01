@@ -1,6 +1,7 @@
 """Temporal splits for the mid-incubation forecast protocol."""
 
 import os
+from datetime import datetime
 
 # Number of sampling rounds used for fitting. The rest are predicted.
 DEFAULT_FIT_ROUNDS = 2
@@ -16,6 +17,17 @@ DEFAULT_FLUX_SKIP_DAYS = 20
 
 # Day zero is excluded from every window; see forecast module docstring.
 EXCLUDE_DAY_ZERO = True
+
+
+def forecast_run_stamp(when=None):
+    """Filesystem-safe UTC-local timestamp for one forecast invocation."""
+    moment = when or datetime.now()
+    return moment.strftime("%Y%m%d_%H%M%S")
+
+
+def forecast_figure_basename(run_stamp):
+    """Timestamped methane figure filename (without directory)."""
+    return f"methane_forecast_{run_stamp}.png"
 
 
 def split_forecast_days(
@@ -68,15 +80,17 @@ def forecast_output_dir(
     holdout_early_days,
     score_flux=False,
     anchor_day=0,
+    run_stamp=None,
 ):
     """Stable folder name for one forecast configuration."""
     flux_tag = "_flux" if score_flux else ""
     anchor_tag = f"_anchor-{int(anchor_day)}d" if anchor_day > 0 else ""
+    stamp_tag = f"_{run_stamp}" if run_stamp else ""
     if holdout_early_days > 0:
         return os.path.join(
             output_root,
             f"{experiment}_holdout-{int(holdout_early_days)}d{flux_tag}{anchor_tag}_"
-            f"fit-first-{fit_rounds}-rounds",
+            f"fit-first-{fit_rounds}-rounds{stamp_tag}",
         )
     if score_flux or anchor_day > 0:
         tags = []
@@ -86,9 +100,11 @@ def forecast_output_dir(
             tags.append(f"anchor-{int(anchor_day)}d")
         return os.path.join(
             output_root,
-            f"{experiment}_{'_'.join(tags)}_fit-first-{fit_rounds}-rounds",
+            f"{experiment}_{'_'.join(tags)}_fit-first-{fit_rounds}-rounds{stamp_tag}",
         )
-    return os.path.join(output_root, f"{experiment}_fit-first-{fit_rounds}-rounds")
+    return os.path.join(
+        output_root, f"{experiment}_fit-first-{fit_rounds}-rounds{stamp_tag}"
+    )
 
 
 def flux_interval_pairs(production_days, flux_skip_days):

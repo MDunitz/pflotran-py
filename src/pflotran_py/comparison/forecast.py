@@ -58,7 +58,9 @@ from .forecast_split import (  # noqa: E402
     DEFAULT_HOLDOUT_EARLY_DAYS,
     EXCLUDE_DAY_ZERO,
     flux_interval_pairs,
+    forecast_figure_basename,
     forecast_output_dir,
+    forecast_run_stamp,
     partition_flux_pairs,
     split_forecast_days,
     window_label,
@@ -326,8 +328,11 @@ def forecast_experiment(
     flux_skip_days=DEFAULT_FLUX_SKIP_DAYS,
     anchor_day=0,
     measured_co2=None,
+    run_stamp=None,
 ):
     """Fit on the early sampling rounds of one experiment, predict the rest."""
+    if run_stamp is None:
+        run_stamp = forecast_run_stamp()
     batches = table[table["Experiment"] == experiment]
     observed = measured_by_batch_and_day(measured, experiment)
 
@@ -473,6 +478,7 @@ def forecast_experiment(
         holdout_early_days,
         score_flux=score_flux,
         anchor_day=anchor_day,
+        run_stamp=run_stamp,
     )
     os.makedirs(directory, exist_ok=True)
 
@@ -494,7 +500,7 @@ def forecast_experiment(
         aw_acetate,
         fit_score,
         predict_score,
-        os.path.join(directory, "methane_forecast.png"),
+        os.path.join(directory, forecast_figure_basename(run_stamp)),
         early_holdout_days=early_holdout_days,
         holdout_early_days=holdout_early_days,
         anchor_day=anchor_day,
@@ -610,6 +616,7 @@ def forecast_experiment(
         "score flux": score_flux,
         "flux skip days": flux_skip_days,
         "anchor day": anchor_day,
+        "run stamp": run_stamp,
     }
 
 
@@ -722,7 +729,7 @@ def write_protocol_note(
         "",
         "## What each folder holds",
         "",
-        "- `methane_forecast.png` -- the timecourse, with the fitting window shaded.",
+        "- `methane_forecast_YYYYMMDD_HHMMSS.png` -- the timecourse, with the fitting window shaded.",
         "  Circles inside the shading were used to choose the parameters; squares",
         "  outside it were not.",
         "- `fit_grid.csv` -- every parameter combination and its score on the fitting",
@@ -878,6 +885,7 @@ def main():
     measured_co2 = (
         load_measured(args.ecsv_glob, "CO2") if args.anchor_day > 0 else None
     )
+    run_stamp = forecast_run_stamp()
     os.makedirs(args.output_root, exist_ok=True)
 
     summary = [
@@ -895,6 +903,7 @@ def main():
             flux_skip_days=args.flux_skip_days,
             anchor_day=args.anchor_day,
             measured_co2=measured_co2,
+            run_stamp=run_stamp,
         )
         for experiment in EXPERIMENTS
     ]
@@ -912,6 +921,7 @@ def main():
     print("=" * 76)
     print("SUMMARY")
     print("=" * 76)
+    print(f"  run stamp         {run_stamp}")
     for row in summary:
         print(
             f"  {row['experiment']}  a_crit H2={row['aw_threshold']:.2f} "

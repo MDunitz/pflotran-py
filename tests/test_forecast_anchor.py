@@ -83,6 +83,23 @@ def test_forecast_output_dir_anchor_tag(tmp_path):
     assert path.endswith("Exp003_anchor-20d_fit-first-2-rounds")
 
 
+def test_forecast_output_dir_includes_run_stamp(tmp_path):
+    path = forecast_output_dir(
+        tmp_path, "Exp003", 2, 20, score_flux=True, anchor_day=20, run_stamp="20260831_195630"
+    )
+    assert path.endswith(
+        "Exp003_holdout-20d_flux_anchor-20d_fit-first-2-rounds_20260831_195630"
+    )
+
+
+def test_forecast_figure_basename():
+    from pflotran_py.comparison.forecast_split import forecast_figure_basename
+
+    assert forecast_figure_basename("20260831_195630") == (
+        "methane_forecast_20260831_195630.png"
+    )
+
+
 def test_model_days_to_physical():
     assert model_days_to_physical([0, 36], 20).tolist() == [20.0, 56.0]
 
