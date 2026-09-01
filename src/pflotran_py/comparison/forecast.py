@@ -204,24 +204,22 @@ def plot_forecast(
     axis.set_ylabel("Methane in the bottle headspace (moles)")
     axis.grid(True, alpha=0.22, linewidth=0.5)
 
-    holdout_note = (
-        f", first {int(holdout_early_days)} days withheld from fitting"
-        if holdout_early_days > 0
-        else ""
-    )
-    anchor_note = (
-        f", warm-started at day {int(anchor_day)} from measured CH4 and CO2"
-        if anchor_day > 0
-        else ""
-    )
+    config_notes = []
+    if holdout_early_days > 0:
+        config_notes.append(f"first {int(holdout_early_days)}d withheld from fit")
+    if anchor_day > 0:
+        config_notes.append(f"warm-started at day {int(anchor_day)}")
+    config_suffix = f" ({'; '.join(config_notes)})" if config_notes else ""
+
     axis.set_title(
-        f"{experiment}: parameters fitted on the first {len(fit_days)} eligible "
-        f"sampling rounds{holdout_note}{anchor_note}, then asked to predict the rest\n"
+        f"{experiment}: fit first {len(fit_days)} eligible sampling rounds, "
+        f"then predict the rest{config_suffix}\n"
         f"ONE_MINUS_AW a_crit: H2={aw_threshold:.2f}, methyl={aw_threshold_methyl:.2f}, "
-        f"acetate={aw_threshold_acetate:.2f}   |   "
-        f"fitted {fit_score:.2f}, predicted {predict_score:.2f}",
-        fontsize=12,
-        pad=14,
+        f"acetate={aw_threshold_acetate:.2f}\n"
+        f"fit score {fit_score:.2f}, predict score {predict_score:.2f}",
+        fontsize=11,
+        pad=10,
+        loc="left",
     )
 
     axis.text(
@@ -308,7 +306,7 @@ def plot_forecast(
         fontsize=9,
         color=PALETTE["guide"],
     )
-    figure.tight_layout(rect=[0, 0.045, 1, 1])
+    figure.subplots_adjust(top=0.78, bottom=0.11)
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
     return output_path
