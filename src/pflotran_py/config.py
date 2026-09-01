@@ -4,6 +4,8 @@ Single source for values previously duplicated across the step files and the
 orchestrator (species map, temperature, output paths).
 """
 
+from .generator.constants import BOTTLE_TEMPERATURE_C
+
 # Short species name -> DataFrame concentration column.
 DEFAULT_SPECIES_MAP = {
     "CO2": "CO2(aq) [M]",
@@ -11,9 +13,8 @@ DEFAULT_SPECIES_MAP = {
 }
 
 # Simulation temperature [°C] for the Stokes-Einstein diffusion correction.
-# Must match the temperature used in the PFLOTRAN .in file (generator default
-# is 18 °C, set to match the batch incubations).
-DEFAULT_TEMPERATURE_C = 18.0
+# Same value written into the PFLOTRAN .in file (batch incubation temperature).
+DEFAULT_TEMPERATURE_C = BOTTLE_TEMPERATURE_C
 
 # Number of timesteps rendered in the 2D surface maps.
 DEFAULT_N_TIMESTEPS_2D = 5
