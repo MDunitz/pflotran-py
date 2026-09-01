@@ -78,8 +78,8 @@ def build_anchor_concentrations(batch_row, ch4_headspace_mol, co2_headspace_mol)
         mgcl2_molarity=mgcl2,
     )
     return {
-        "CH4(aq)": f"{ch4_aq.to_value('mol/L'):.6e} G CH4(g)",
-        "HCO3-": f"{co2_aq.to_value('mol/L'):.6e} G CO2(g)",
+        "CH4(aq)": f"{ch4_aq.to_value('mol/L'):.6e} T CH4(g)",
+        "HCO3-": f"{co2_aq.to_value('mol/L'):.6e} T CO2(g)",
     }
 
 

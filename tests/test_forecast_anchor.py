@@ -61,8 +61,8 @@ def test_build_anchor_concentrations_use_gas_equilibrium():
         }
     )
     concentrations = build_anchor_concentrations(batch, 1e-6, 2e-6)
-    assert concentrations["CH4(aq)"].endswith("G CH4(g)")
-    assert concentrations["HCO3-"].endswith("G CO2(g)")
+    assert concentrations["CH4(aq)"].endswith("T CH4(g)")
+    assert concentrations["HCO3-"].endswith("T CO2(g)")
 
 
 def test_headspace_moles_to_aqueous_round_trip():
