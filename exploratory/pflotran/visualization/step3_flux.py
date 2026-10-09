@@ -26,12 +26,7 @@ def install_dependencies():
 
     for package in packages:
         try:
-            if package == "bokeh":
-                import bokeh
-            elif package == "scipy":
-                import scipy
-            else:
-                __import__(package)
+            __import__(package)
             print(f"{package} is already installed")
         except ImportError:
             print(f"Installing {package}...")
@@ -76,14 +71,12 @@ def calculate_concentration_gradients(df):
     Returns:
         pd.DataFrame: DataFrame with added gradient columns
     """
-    from scipy.spatial.distance import cdist
 
     # Create a copy of the dataframe
     flux_df = df.copy()
 
     # Species of interest for flux calculations
     co2_col = "CO2(aq) [M]"
-    ch4_total_col = "Total CH4(aq) [M]"
     ch4_free_col = "Free CH4(aq) [M]"
 
     # Initialize gradient columns
@@ -178,12 +171,12 @@ def calculate_concentration_gradients(df):
     )
 
     # Print some statistics about the calculated fluxes
-    print(f"CO2 flux statistics:")
+    print("CO2 flux statistics:")
     print(f"  Min: {flux_df['CO2_flux_magnitude'].min():.3e}")
     print(f"  Max: {flux_df['CO2_flux_magnitude'].max():.3e}")
     print(f"  Mean: {flux_df['CO2_flux_magnitude'].mean():.3e}")
 
-    print(f"CH4 flux statistics:")
+    print("CH4 flux statistics:")
     print(f"  Min: {flux_df['CH4_flux_magnitude'].min():.3e}")
     print(f"  Max: {flux_df['CH4_flux_magnitude'].max():.3e}")
     print(f"  Mean: {flux_df['CH4_flux_magnitude'].mean():.3e}")
@@ -233,10 +226,9 @@ def create_flux_visualization(flux_df):
     """
     from bokeh.plotting import figure, save, output_file
     from bokeh.layouts import column, row
-    from bokeh.models import HoverTool, ColorBar, ColumnDataSource, Select
+    from bokeh.models import HoverTool, ColumnDataSource
     from bokeh.transform import linear_cmap
     from bokeh.palettes import Viridis256
-    from bokeh.io import curdoc
 
     print("Creating flux visualization...")
 
@@ -256,7 +248,7 @@ def create_flux_visualization(flux_df):
 
         # Create 2D projection plots (X-Y view, top-down)
         surface_data = (
-            time_data[time_data["is_surface"] == True]
+            time_data[time_data["is_surface"]]
             if "is_surface" in time_data.columns
             else time_data
         )
@@ -309,12 +301,11 @@ def create_flux_visualization(flux_df):
             )
 
             # Add arrows for flux direction
-            arrow_scale = 1000  # Adjust as needed
             p1.segment(
                 x0="X [m]",
                 y0="Y [m]",
-                x1=f"X [m]",
-                y1=f"Y [m]",  # Will be computed in JavaScript
+                x1="X [m]",
+                y1="Y [m]",  # Will be computed in JavaScript
                 source=source_co2,
                 line_width=2,
                 alpha=0.5,
@@ -438,12 +429,12 @@ def main():
     )
 
     # Print concentration statistics
-    print(f"CO2 concentration statistics:")
+    print("CO2 concentration statistics:")
     print(f"  Min: {df['CO2(aq) [M]'].min():.3e}")
     print(f"  Max: {df['CO2(aq) [M]'].max():.3e}")
     print(f"  Mean: {df['CO2(aq) [M]'].mean():.3e}")
 
-    print(f"CH4 concentration statistics:")
+    print("CH4 concentration statistics:")
     print(f"  Min: {df['Free CH4(aq) [M]'].min():.3e}")
     print(f"  Max: {df['Free CH4(aq) [M]'].max():.3e}")
     print(f"  Mean: {df['Free CH4(aq) [M]'].mean():.3e}")

@@ -6,6 +6,3 @@ exclude =
     __pycache__,
     *.ipynb,
     exploratory/co2_dbase.dat
-
-per-file-ignores =
-    exploratory/*:F401,F541,F841,F824,E741,E712,W291,W293

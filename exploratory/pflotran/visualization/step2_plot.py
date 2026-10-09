@@ -5,9 +5,7 @@
 # After running, do: open multi_variable_concentration_3d.html
 
 import os
-import sys
 import pandas as pd
-import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -40,7 +38,7 @@ def display_available_variables(df):
     if df is None:
         return
 
-    print(f"\nAvailable variables for plotting:")
+    print("\nAvailable variables for plotting:")
     variables = [
         col
         for col in df.columns
@@ -126,7 +124,7 @@ def create_multi_variable_plot(df, variables_to_plot):
     available_vars = [var for var in variables_to_plot if var in df.columns]
 
     if not available_vars:
-        print(f"None of the requested variables found in data!")
+        print("None of the requested variables found in data!")
         print(f"Requested: {variables_to_plot}")
         print(
             f"Available: {[col for col in df.columns if col not in ['Time Index', 'X [m]', 'Y [m]', 'Z [m]']]}"
@@ -348,10 +346,10 @@ def main():
         "Gamma H2O",
     ]
 
-    print(f"Creating visualizations...")
+    print("Creating visualizations...")
     print(f"Variables to plot: {variables_to_plot}")
     print(
-        f"\n💡 To change variables, edit the 'variables_to_plot' list in this script."
+        "\n💡 To change variables, edit the 'variables_to_plot' list in this script."
     )
 
     # Create multi-variable plot
@@ -372,7 +370,7 @@ def main():
             single_fig.write_html(single_filename)
             print(f"Single variable plot saved as: {single_filename}")
 
-        print(f"\nVisualization complete! Open html file")
+        print("\nVisualization complete! Open html file")
 
         # Show the plot
         try:

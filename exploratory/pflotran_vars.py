@@ -58,7 +58,7 @@ Journal of Geophysical Research: Biogeosciences, 129(3), e2023JG007633. https://
 
 # 1) fermentation
 """
-1.00e+00 DOM1  + 6.67e-01 H2O  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 6.67e-01 H2(aq)  + 3.33e-01 Tracer 
+1.00e+00 DOM1  + 6.67e-01 H2O  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 6.67e-01 H2(aq)  + 3.33e-01 Tracer
 """
 
 ferm_rxn_const = 6.00e-07
@@ -71,7 +71,7 @@ ferm_acetate_inhib_above = 4.00e-02
 
 # 2) DOM aerobic respiration
 """
-1.00e+00 DOM1  + 1.00e+00 O2(aq)  + 1.00e+00 H2O  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer 
+1.00e+00 DOM1  + 1.00e+00 O2(aq)  + 1.00e+00 H2O  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer
 """
 
 dom_aerobic_rxn_const = 1.80e-07
@@ -92,7 +92,7 @@ fe2_abiotic_backward_rate = 0.00e-06
 
 # 4) Fe(II) microbial oxidation
 """
-1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  -> 1.00e+00 Fe+++  + 5.00e-01 H2O 
+1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  -> 1.00e+00 Fe+++  + 5.00e-01 H2O
 """
 
 fe2_microbial_rxn_const = 5.5e-05
@@ -105,7 +105,7 @@ fe2_microbial_fe2_thresh_conc = 1.10e-15
 
 # 5) Hydrogenotrophic methanogenesis
 """
-4.00e+00 H2(aq)  + 1.00e+00 HCO3-  + 1.00e+00 H+  -> 1.00e+00 CH4(aq)  + 3.00e+00 H2O 
+4.00e+00 H2(aq)  + 1.00e+00 HCO3-  + 1.00e+00 H+  -> 1.00e+00 CH4(aq)  + 3.00e+00 H2O
 """
 
 hydro_methano_rxn_const = 7.2e-09
@@ -122,7 +122,7 @@ hydro_methano_h_inhib_above = 1.78e-07
 
 # 6) Acetate aerobic respiration
 """
-1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer 
+1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer
 """
 
 acetate_aerobic_rxn_const = 3.00e-07
@@ -135,7 +135,7 @@ acetate_aerobic_acetate_thresh_conc = 1.10e-16
 
 # 7) Hydrogen oxidation
 """
-2.00e+00 H2(aq)  + 1.00e+00 O2(aq)  -> 2.00e+00 H2O 
+2.00e+00 H2(aq)  + 1.00e+00 O2(aq)  -> 2.00e+00 H2O
 """
 
 h2_oxidation_rxn_const = 1.5e-06
@@ -148,7 +148,7 @@ h2_oxidation_o2_thresh_conc = 0.00e00
 
 # 8) Fe(III) reduction
 """
-1.00e+00 Acetate-  + 8.00e+00 Fe+++  + 4.00e+00 H2O  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer 
+1.00e+00 Acetate-  + 8.00e+00 Fe+++  + 4.00e+00 H2O  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer
 """
 
 fe3_reduction_rxn_const = 2.25e-08
@@ -328,7 +328,7 @@ recharge_ch3oh = 2.00e-25  # T
 ############################
 """
 porosity = 0.97d0
-SOIL_COMPRESSIBILITY 1.d-07              
+SOIL_COMPRESSIBILITY 1.d-07
 SOIL_REFERENCE_PRESSURE 201325.d0
 ROCK_DENSITY 2650.0d0
 SPECIFIC_HEAT 830.0d0
@@ -340,7 +340,7 @@ THERMAL_CONDUCTIVITY_WET 1.6082691464310437d0
     PERM_X 6.5870260083342112d-013
     PERM_Y 6.5870260083342112d-013
     PERM_Z 9.5870260083342112d-14
-    
+
 """
 
 ############################
@@ -373,7 +373,7 @@ include_liquid_saturation = True  # LIQUID_SATURATION
 
 # Observation file settings
 """
-Observation point output settings  
+Observation point output settings
 """
 obs_output_periodic_time = 1.0  # d (days) - observation output frequency
 

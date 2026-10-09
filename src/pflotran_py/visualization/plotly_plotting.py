@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ..analysis.columns import TIME_COL, time_axis_column
+from ..analysis.columns import TIME_COL, TIME_UNIT_TO_DAYS, time_axis_column
 
 SPATIAL_COLUMNS = ["X [m]", "Y [m]", "Z [m]"]
 DEFAULT_COLORSCALE = "Viridis"
@@ -51,8 +51,9 @@ def colorbar_position(row, col, n_cols):
 def format_time_label(time_days):
     """Compact label for slider / frame titles (days or years)."""
     t = float(time_days)
-    if abs(t) >= 365.25 and abs(t % 365.25) < 1e-6:
-        years = t / 365.25
+    pflotran_days_per_year = TIME_UNIT_TO_DAYS["y"]
+    if abs(t) >= pflotran_days_per_year and abs(t % pflotran_days_per_year) < 1e-6:
+        years = t / pflotran_days_per_year
         return f"{years:g} y"
     if abs(t - round(t)) < 1e-9:
         return f"{round(t):g} d"
