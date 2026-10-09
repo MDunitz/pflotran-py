@@ -880,9 +880,7 @@ def main():
         else build_batch_table()
     )
     measured = load_measured(args.ecsv_glob, "CH4_FID")
-    measured_co2 = (
-        load_measured(args.ecsv_glob, "CO2") if args.anchor_day > 0 else None
-    )
+    measured_co2 = load_measured(args.ecsv_glob, "CO2") if args.anchor_day > 0 else None
     run_stamp = forecast_run_stamp()
     os.makedirs(args.output_root, exist_ok=True)
 

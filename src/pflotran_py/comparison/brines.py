@@ -1,6 +1,6 @@
 """Measured brine compositions for the sealed-bottle incubations.
 
-A PFLOTRAN deck needs the concentration of each individual ion. The specific 
+A PFLOTRAN deck needs the concentration of each individual ion. The specific
 experiment being modeled here records the *mass of each salt* weighed out into a brine,
 and the volume that brine was made up to. This module converts one into the
 other, so that a deck can be built from what was actually in the bottle rather

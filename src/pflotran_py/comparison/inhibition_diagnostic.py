@@ -224,7 +224,9 @@ def run_all_variants(
     for variant in variants:
         variant_decks = os.path.join(deck_root, variant.key)
         if not os.path.isdir(variant_decks):
-            logger.warning("No decks for %s at %s; skipping", variant.key, variant_decks)
+            logger.warning(
+                "No decks for %s at %s; skipping", variant.key, variant_decks
+            )
             continue
 
         decks = sorted(
@@ -382,9 +384,7 @@ def measured_suppression(table, ecsv_glob, molecule="CH4_FID"):
     # The salt-free control is named "C". "Su_C" is a separate substrate
     # control and is not the salt-free reference, so the match is exact.
     controls = (
-        frame[frame["brine"] == "C"]
-        .groupby("experiment")["measured_ch4_moles"]
-        .max()
+        frame[frame["brine"] == "C"].groupby("experiment")["measured_ch4_moles"].max()
     )
     frame["measured_suppression"] = frame.apply(
         lambda row: (
@@ -547,7 +547,9 @@ def summarise(
         try:
             measured = measured_suppression(table, ecsv_glob)
         except FileNotFoundError:
-            logger.warning("No measured tables matched %s; plotting model only", ecsv_glob)
+            logger.warning(
+                "No measured tables matched %s; plotting model only", ecsv_glob
+            )
 
     os.makedirs(output_dir, exist_ok=True)
     written = {}
@@ -649,9 +651,7 @@ def main():
         help="Restrict to these variants.",
     )
     parser.add_argument("--experiments", nargs="+", default=None)
-    parser.add_argument(
-        "--final-time-days", type=int, default=BOTTLE_FINAL_TIME_DAYS
-    )
+    parser.add_argument("--final-time-days", type=int, default=BOTTLE_FINAL_TIME_DAYS)
     parser.add_argument(
         "--aw-threshold",
         type=float,

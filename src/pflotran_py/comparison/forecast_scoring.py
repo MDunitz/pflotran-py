@@ -27,9 +27,7 @@ def score_window(grid_entry, observed, days, anchor_day=0):
             continue
         model_days, model_moles = grid_entry[batch_id]
         modelled.append(
-            model_at_days(
-                model_days, model_moles, _model_day(row["day"], anchor_day)
-            )
+            model_at_days(model_days, model_moles, _model_day(row["day"], anchor_day))
         )
         measured_values.append(row["Cumulative Moles"])
     return score(modelled, measured_values), len(modelled)
@@ -47,18 +45,12 @@ def score_flux_window(grid_entry, observed, pairs, anchor_day=0):
             if t0 not in batch_measured or t1 not in batch_measured:
                 continue
             measured_rates.append(
-                interval_production_rate(
-                    batch_measured[t0], batch_measured[t1], t0, t1
-                )
+                interval_production_rate(batch_measured[t0], batch_measured[t1], t0, t1)
             )
             modelled_rates.append(
                 interval_production_rate(
-                    model_at_days(
-                        model_days, model_moles, _model_day(t0, anchor_day)
-                    ),
-                    model_at_days(
-                        model_days, model_moles, _model_day(t1, anchor_day)
-                    ),
+                    model_at_days(model_days, model_moles, _model_day(t0, anchor_day)),
+                    model_at_days(model_days, model_moles, _model_day(t1, anchor_day)),
                     t0,
                     t1,
                 )

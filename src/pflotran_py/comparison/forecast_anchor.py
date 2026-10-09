@@ -29,11 +29,7 @@ def anchor_final_time_days(anchor_day, total_days=BOTTLE_FINAL_TIME_DAYS):
 
 def interpolate_cumulative_moles(batch_measured, target_day):
     """Median cumulative headspace moles at one day, linearly interpolated."""
-    by_day = (
-        batch_measured.groupby("day")["Cumulative Moles"]
-        .median()
-        .sort_index()
-    )
+    by_day = batch_measured.groupby("day")["Cumulative Moles"].median().sort_index()
     if by_day.empty:
         return None
     days = by_day.index.to_numpy(dtype=float)

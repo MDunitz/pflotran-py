@@ -86,7 +86,9 @@ def _apply_aw_upstream_inhibition(kwargs):
     if fixed is None:
         return kwargs
 
-    ferment_crit = kwargs.pop("aw_threshold_fermentation", DEFAULT_AW_THRESHOLD_FERMENTATION)
+    ferment_crit = kwargs.pop(
+        "aw_threshold_fermentation", DEFAULT_AW_THRESHOLD_FERMENTATION
+    )
     hydro_crit = kwargs.pop("aw_threshold_hydrolysis", DEFAULT_AW_THRESHOLD_HYDROLYSIS)
     f_ferment = one_minus_aw_factor(fixed, ferment_crit)
     f_hydro = one_minus_aw_factor(fixed, hydro_crit)
@@ -150,9 +152,7 @@ def generate_deck_for_batch(
             # salt-correlated error -- ~exact for NaCl, ~0.02 high for the Mg
             # brines (Mg_H: 0.842 model vs 0.824 meter) -- so using it here
             # would bias the Na-vs-Mg inhibition contrast. Meter is the default.
-            kwargs["fixed_water_activity"] = pitzer_water_activity_from_batch(
-                batch_row
-            )
+            kwargs["fixed_water_activity"] = pitzer_water_activity_from_batch(batch_row)
         elif source == "measured":
             kwargs["fixed_water_activity"] = float(water_activity)
         elif source == "pflotran":

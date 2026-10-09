@@ -21,9 +21,7 @@ from pflotran_py.generator.bottle_generator import BottleGenerator
 
 
 def test_every_variant_has_a_distinct_switch_combination():
-    combinations = {
-        (v.cl_monod, v.cl_smoothstep, v.sulfate) for v in VARIANTS
-    }
+    combinations = {(v.cl_monod, v.cl_smoothstep, v.sulfate) for v in VARIANTS}
     assert len(combinations) == len(VARIANTS)
 
 

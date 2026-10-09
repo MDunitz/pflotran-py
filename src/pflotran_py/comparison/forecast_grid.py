@@ -130,13 +130,10 @@ def aw_grid_tag(
     aw_upstream_inhibition=False,
 ):
     """Filesystem-safe label for one parameter combination."""
-    tag = (
-        f"aw{aw_threshold:.2f}_{aw_threshold_methyl:.2f}_{aw_threshold_acetate:.2f}"
-    )
+    tag = f"aw{aw_threshold:.2f}_{aw_threshold_methyl:.2f}_{aw_threshold_acetate:.2f}"
     if aw_upstream_inhibition:
         tag += (
-            f"_ferm{aw_threshold_fermentation:.2f}"
-            f"_hyd{aw_threshold_hydrolysis:.2f}"
+            f"_ferm{aw_threshold_fermentation:.2f}" f"_hyd{aw_threshold_hydrolysis:.2f}"
         )
     return tag
 
@@ -145,9 +142,7 @@ def measured_by_batch_and_day(measured, experiment):
     """Median measured methane per batch per sampling day."""
     rows = measured[measured["Experiment"] == experiment].copy()
     rows["day"] = rows["Days since start"].round(0)
-    return (
-        rows.groupby(["Batch ID", "day"])["Cumulative Moles"].median().reset_index()
-    )
+    return rows.groupby(["Batch ID", "day"])["Cumulative Moles"].median().reset_index()
 
 
 def model_at_days(days_model, moles_model, wanted_days):
@@ -187,8 +182,7 @@ def run_grid(
             )
         anchors = anchor_table(measured_ch4, measured_co2, batches, anchor_day)
         anchor_lookup = {
-            int(row["Batch ID"]): row["concentrations"]
-            for _, row in anchors.iterrows()
+            int(row["Batch ID"]): row["concentrations"] for _, row in anchors.iterrows()
         }
         if not anchor_lookup:
             raise ValueError(
@@ -212,10 +206,7 @@ def run_grid(
             batch_id = int(batch["Batch ID"])
             if anchor_day > 0 and batch_id not in anchor_lookup:
                 continue
-            name = (
-                f"{batch['Experiment']}_B{batch_id:02d}"
-                f"_{batch['Brine Name']}"
-            )
+            name = f"{batch['Experiment']}_B{batch_id:02d}" f"_{batch['Brine Name']}"
             deck_dir = os.path.join(work_root, f"{tag_prefix}_decks_{tag}")
             run_root = os.path.join(work_root, f"{tag_prefix}_runs_{tag}")
             deck_kwargs = forecast_deck_kwargs(

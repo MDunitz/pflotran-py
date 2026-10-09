@@ -66,7 +66,9 @@ def test_pathway_specific_aw_thresholds_are_ordered():
     assert by_name["AWINHIBIT"] == AW_CRIT_HYDROGENOTROPHIC
     assert by_name["AWINHIBITMETHYL"] == AW_CRIT_METHYLOTROPHIC
     assert by_name["AWINHIBITACETATE"] == AW_CRIT_ACETOCLASTIC
-    assert by_name["AWINHIBITACETATE"] > by_name["AWINHIBITMETHYL"] > by_name["AWINHIBIT"]
+    assert (
+        by_name["AWINHIBITACETATE"] > by_name["AWINHIBITMETHYL"] > by_name["AWINHIBIT"]
+    )
 
 
 def test_aw_crits_are_ranked_and_match_cli_imports():

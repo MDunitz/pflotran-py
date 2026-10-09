@@ -13,7 +13,10 @@ from pflotran_py.comparison.forecast_anchor import (
     measured_headspace_at_anchor,
     model_days_to_physical,
 )
-from pflotran_py.comparison.forecast_split import forecast_output_dir, split_forecast_days
+from pflotran_py.comparison.forecast_split import (
+    forecast_output_dir,
+    split_forecast_days,
+)
 from pflotran_py.comparison.headspace import (
     GASES,
     aqueous_concentration_to_headspace_moles,
@@ -73,9 +76,12 @@ def test_headspace_moles_to_aqueous_round_trip():
 
 
 def test_split_forecast_days_with_anchor():
-    assert split_forecast_days(
-        [0, 10, 56, 91, 119], fit_rounds=2, anchor_day=20
-    ) == ([56, 91], [119], [], [56, 91, 119])
+    assert split_forecast_days([0, 10, 56, 91, 119], fit_rounds=2, anchor_day=20) == (
+        [56, 91],
+        [119],
+        [],
+        [56, 91, 119],
+    )
 
 
 def test_forecast_output_dir_anchor_tag(tmp_path):
@@ -85,7 +91,13 @@ def test_forecast_output_dir_anchor_tag(tmp_path):
 
 def test_forecast_output_dir_includes_run_stamp(tmp_path):
     path = forecast_output_dir(
-        tmp_path, "Exp003", 2, 20, score_flux=True, anchor_day=20, run_stamp="20260831_195630"
+        tmp_path,
+        "Exp003",
+        2,
+        20,
+        score_flux=True,
+        anchor_day=20,
+        run_stamp="20260831_195630",
     )
     assert path.endswith(
         "Exp003_holdout-20d_flux_anchor-20d_fit-first-2-rounds_20260831_195630"

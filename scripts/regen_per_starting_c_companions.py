@@ -81,9 +81,7 @@ def paired_from_forecast(
                 "batch": batch,
                 "model": model,
                 "measured": points,
-                "name": (
-                    f"{experiment}_B{batch_id:02d}_{batch['Brine Name']}"
-                ),
+                "name": (f"{experiment}_B{batch_id:02d}_{batch['Brine Name']}"),
             }
         )
     return paired

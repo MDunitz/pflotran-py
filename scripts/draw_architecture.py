@@ -15,7 +15,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch  # noqa: E402
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "docs" / "architecture.csv"
 OUTPUT_PATH = ROOT / "output" / "docs" / "architecture.png"
@@ -64,7 +63,9 @@ def read_diagram(path=DATA_PATH):
     for edge in edges:
         for key in ("source", "target"):
             if edge[key] not in nodes:
-                raise ValueError(f"Edge {edge['id']} references missing {key} {edge[key]!r}")
+                raise ValueError(
+                    f"Edge {edge['id']} references missing {key} {edge[key]!r}"
+                )
     return nodes, edges
 
 
@@ -132,7 +133,9 @@ def draw_legend(axis):
         colour = ROLE_COLOURS[role]
         axis.add_patch(
             FancyBboxPatch(
-                (x, y - 0.08), 0.24, 0.16,
+                (x, y - 0.08),
+                0.24,
+                0.16,
                 boxstyle="round,pad=0.02",
                 linewidth=0,
                 facecolor=colour,
@@ -140,7 +143,9 @@ def draw_legend(axis):
                 zorder=2,
             )
         )
-        axis.text(x + 0.34, y, ROLE_LABELS[role], va="center", fontsize=7.6, color="#333333")
+        axis.text(
+            x + 0.34, y, ROLE_LABELS[role], va="center", fontsize=7.6, color="#333333"
+        )
 
 
 def draw(output_path=OUTPUT_PATH, data_path=DATA_PATH):

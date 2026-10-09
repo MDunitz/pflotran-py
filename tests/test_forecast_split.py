@@ -57,7 +57,9 @@ def test_window_label():
     early_holdout_days = [10]
 
     assert window_label(0, fit_days, predict_days, early_holdout_days) == "baseline"
-    assert window_label(10, fit_days, predict_days, early_holdout_days) == "early holdout"
+    assert (
+        window_label(10, fit_days, predict_days, early_holdout_days) == "early holdout"
+    )
     assert window_label(56, fit_days, predict_days, early_holdout_days) == "fitted"
     assert window_label(119, fit_days, predict_days, early_holdout_days) == "held out"
 

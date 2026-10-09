@@ -48,9 +48,7 @@ def split_forecast_days(
         early_holdout_days = [
             day for day in production_days if day <= holdout_early_days
         ]
-        eligible_days = [
-            day for day in production_days if day > holdout_early_days
-        ]
+        eligible_days = [day for day in production_days if day > holdout_early_days]
     else:
         early_holdout_days = []
         eligible_days = production_days
@@ -90,9 +88,7 @@ def forecast_output_dir(
     upstream_tag = "_upstream" if aw_upstream_inhibition else ""
     multidof_tag = "_multidof" if multi_parameter_fit else ""
     stamp_tag = f"_{run_stamp}" if run_stamp else ""
-    suffix = (
-        f"fit-first-{fit_rounds}-rounds{upstream_tag}{multidof_tag}{stamp_tag}"
-    )
+    suffix = f"fit-first-{fit_rounds}-rounds{upstream_tag}{multidof_tag}{stamp_tag}"
     if holdout_early_days > 0:
         return os.path.join(
             output_root,
@@ -129,8 +125,6 @@ def partition_flux_pairs(pairs, fit_days, predict_days):
     predict_start = min(predict_days)
     fit_pairs = [(t0, t1) for t0, t1 in pairs if t1 <= fit_end]
     predict_pairs = [
-        (t0, t1)
-        for t0, t1 in pairs
-        if t1 >= predict_start and t0 >= min(fit_days)
+        (t0, t1) for t0, t1 in pairs if t1 >= predict_start and t0 >= min(fit_days)
     ]
     return fit_pairs, predict_pairs

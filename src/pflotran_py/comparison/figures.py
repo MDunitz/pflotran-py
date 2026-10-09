@@ -823,7 +823,10 @@ def plot_measured_against_modelled(
             continue
 
         values = np.array(pairs)
-        low = min(values.min() * 0.3, 1e-8 if not per_starting_c else 1e-8 / starting_carbon_moles)
+        low = min(
+            values.min() * 0.3,
+            1e-8 if not per_starting_c else 1e-8 / starting_carbon_moles,
+        )
         high = values.max() * 3
         line = np.array([low, high])
 
