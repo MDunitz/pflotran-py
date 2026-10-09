@@ -13,25 +13,32 @@ module Reaction_Sandbox_AWInhibitMethyl_class
 
   PetscInt, parameter :: AWINHIBITMETHYL_THRESHOLD_INHIBITION = 1
   PetscInt, parameter :: AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION = 2
+  PetscInt, parameter :: AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION = 3
+  ! Match generator.constants.AW_SMOOTHSTEP_INTERVAL (keep in sync by hand).
+  PetscReal, parameter :: AW_SMOOTHSTEP_INTERVAL = 0.20d0
 
   type, public, &
     extends(reaction_sandbox_base_type) :: reaction_sandbox_awinhibitmethyl_type
-    
-    ! Water activity inhibition parameters
+
     PetscReal :: aw_threshold
     PetscInt :: inhibition_type
+    PetscReal :: fixed_water_activity
 
-    ! Reaction parameters for methylotrophic methanogenesis: CH3OH + H2(aq) -> CH4(aq) + H2O
+    ! Network-matching Monod kinetics for methylotrophic methanogenesis:
+    !   CH3OH + H2(aq) -> CH4(aq) + H2O
     PetscReal :: rate_constant
+    PetscReal :: half_saturation_ch3oh
+    PetscReal :: half_saturation_h2
+    PetscReal :: threshold_ch3oh
+    PetscReal :: threshold_h2
+    PetscReal :: o2_inhibition
     PetscReal :: activation_energy
     PetscReal :: reference_temperature
 
-    ! Species names and indices
-    character(len=MAXWORDLENGTH) :: species_names(3)
-    PetscInt :: nspecies
     PetscInt :: i_ch3oh
     PetscInt :: i_h2
     PetscInt :: i_ch4
+    PetscInt :: i_o2
 
   contains
     procedure, public :: ReadInput  => AWInhibitMethylRead
@@ -47,29 +54,33 @@ contains
 ! ************************************************************************** !
 
 function AWInhibitMethylCreate()
-  !
-  ! Allocates AWInhibitMethyl reaction object for water activity inhibited methylotrophic methanogenesis
-  !
 
   implicit none
 
   class(reaction_sandbox_awinhibitmethyl_type), pointer :: AWInhibitMethylCreate
 
   allocate(AWInhibitMethylCreate)
-  
-  ! Default water activity threshold of 0.5
-  AWInhibitMethylCreate%aw_threshold = 0.5d0
-  AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_THRESHOLD_INHIBITION
-  
-  ! Reaction parameters
+
+  ! Default a_crit matches generator.constants AW_CRIT_METHYLOTROPHIC (0.85).
+  ! Default shape matches AW_INHIBITION_TYPE (ONE_MINUS_AW). Deck keywords
+  ! WATER_ACTIVITY_THRESHOLD / INHIBITION_TYPE override when present.
+  AWInhibitMethylCreate%aw_threshold = 0.85d0
+  AWInhibitMethylCreate%inhibition_type = AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION
+  AWInhibitMethylCreate%fixed_water_activity = UNINITIALIZED_DOUBLE
+
   AWInhibitMethylCreate%rate_constant = UNINITIALIZED_DOUBLE
+  AWInhibitMethylCreate%half_saturation_ch3oh = 1.0d-1
+  AWInhibitMethylCreate%half_saturation_h2 = 1.0d-1
+  AWInhibitMethylCreate%threshold_ch3oh = 1.1d-15
+  AWInhibitMethylCreate%threshold_h2 = 1.1d-15
+  AWInhibitMethylCreate%o2_inhibition = 1.0d-6
   AWInhibitMethylCreate%activation_energy = UNINITIALIZED_DOUBLE
   AWInhibitMethylCreate%reference_temperature = UNINITIALIZED_DOUBLE
-  
-  ! Species indices
+
   AWInhibitMethylCreate%i_ch3oh = UNINITIALIZED_INTEGER
   AWInhibitMethylCreate%i_h2 = UNINITIALIZED_INTEGER
   AWInhibitMethylCreate%i_ch4 = UNINITIALIZED_INTEGER
+  AWInhibitMethylCreate%i_o2 = UNINITIALIZED_INTEGER
 
   nullify(AWInhibitMethylCreate%next)
 
@@ -78,9 +89,6 @@ end function AWInhibitMethylCreate
 ! ************************************************************************** !
 
 subroutine AWInhibitMethylRead(this,input,option)
-  !
-  ! Reads input deck for water activity inhibited methylotrophic methanogenesis parameters
-  !
 
   use Option_module
   use String_module
@@ -103,8 +111,7 @@ subroutine AWInhibitMethylRead(this,input,option)
     if (InputCheckExit(input,option)) exit
 
     call InputReadCard(input,option,word)
-    call InputErrorMsg(input,option,'keyword', &
-                       trim(error_string))
+    call InputErrorMsg(input,option,'keyword',trim(error_string))
     call StringToUpper(word)
 
     select case(trim(word))
@@ -116,11 +123,40 @@ subroutine AWInhibitMethylRead(this,input,option)
           call PrintErrMsg(option)
         endif
 
+      case('FIXED_WATER_ACTIVITY')
+        call InputReadDouble(input,option,this%fixed_water_activity)
+        call InputErrorMsg(input,option,'fixed_water_activity',error_string)
+        if (this%fixed_water_activity < 0.d0 .or. &
+            this%fixed_water_activity > 1.d0) then
+          option%io_buffer = 'FIXED_WATER_ACTIVITY must be between 0 and 1'
+          call PrintErrMsg(option)
+        endif
+
       case('RATE_CONSTANT')
         call InputReadDouble(input,option,this%rate_constant)
         call InputErrorMsg(input,option,'rate_constant',error_string)
-        call InputReadAndConvertUnits(input,this%rate_constant,'mol/m^3-sec',&
+        call InputReadAndConvertUnits(input,this%rate_constant,'mol/L-sec',&
                         trim(error_string)//',rate_constant',option)
+
+      case('HALF_SATURATION_CH3OH')
+        call InputReadDouble(input,option,this%half_saturation_ch3oh)
+        call InputErrorMsg(input,option,'half_saturation_ch3oh',error_string)
+
+      case('HALF_SATURATION_H2')
+        call InputReadDouble(input,option,this%half_saturation_h2)
+        call InputErrorMsg(input,option,'half_saturation_h2',error_string)
+
+      case('THRESHOLD_CH3OH')
+        call InputReadDouble(input,option,this%threshold_ch3oh)
+        call InputErrorMsg(input,option,'threshold_ch3oh',error_string)
+
+      case('THRESHOLD_H2')
+        call InputReadDouble(input,option,this%threshold_h2)
+        call InputErrorMsg(input,option,'threshold_h2',error_string)
+
+      case('O2_INHIBITION')
+        call InputReadDouble(input,option,this%o2_inhibition)
+        call InputErrorMsg(input,option,'o2_inhibition',error_string)
 
       case('INHIBITION_TYPE')
         call InputReadWord(input,option,word,PETSC_TRUE)
@@ -131,6 +167,8 @@ subroutine AWInhibitMethylRead(this,input,option)
             this%inhibition_type = AWINHIBITMETHYL_THRESHOLD_INHIBITION
           case('SMOOTHSTEP')
             this%inhibition_type = AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION
+          case('ONE_MINUS_AW')
+            this%inhibition_type = AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION
           case default
             error_string = trim(error_string) // ',INHIBITION_TYPE'
             call InputKeywordUnrecognized(input,word,error_string ,option)
@@ -159,9 +197,6 @@ end subroutine AWInhibitMethylRead
 ! ************************************************************************** !
 
 subroutine AWInhibitMethylSetup(this,reaction,option)
-  !
-  ! Sets up the water activity inhibited methylotrophic methanogenesis reaction
-  !
 
   use Option_module
   use Utility_module
@@ -175,24 +210,19 @@ subroutine AWInhibitMethylSetup(this,reaction,option)
 
   character(len=MAXSTRINGLENGTH) :: word
 
-  ! Check that rate constant is provided
   if (Uninitialized(this%rate_constant)) then
-    option%io_buffer = 'RATE_CONSTANT must be provided for AWInhibitMethyl reaction'
+    option%io_buffer = 'RATE_CONSTANT must be provided for AWInhibitMethyl'
     call PrintErrMsg(option)
   endif
 
-  ! Get species indices for methylotrophic methanogenesis reaction: CH3OH + H2(aq) -> CH4(aq) + H2O
   word = 'CH3OH'
-  this%i_ch3oh = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
+  this%i_ch3oh = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
   word = 'H2(aq)'
-  this%i_h2 = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
-
+  this%i_h2 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
   word = 'CH4(aq)'
-  this%i_ch4 = &
-    ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  this%i_ch4 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
+  word = 'O2(aq)'
+  this%i_o2 = ReactionAuxGetPriSpecIDFromName(word,reaction,option)
 
   if (Initialized(this%activation_energy) .and. &
       UnInitialized(this%reference_temperature)) then
@@ -208,11 +238,6 @@ end subroutine AWInhibitMethylSetup
 subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
                           rt_auxvar,global_auxvar,material_auxvar, &
                           reaction,option)
-  !
-  ! Evaluates the water activity inhibited methylotrophic methanogenesis reaction
-  ! Reaction: CH3OH + H2(aq) -> CH4(aq) + H2O
-  ! Inhibited below water activity threshold
-  !
 
   use Material_Aux_module
   use Option_module
@@ -226,7 +251,6 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
   type(option_type) :: option
   class(reaction_rt_type) :: reaction
   PetscBool :: compute_derivative
-  ! the following arrays must be declared after reaction
   PetscReal :: Residual(reaction%ncomp)
   PetscReal :: Jacobian(reaction%ncomp,reaction%ncomp)
   type(reactive_transport_auxvar_type) :: rt_auxvar
@@ -234,25 +258,21 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
   type(material_auxvar_type) :: material_auxvar
 
   PetscInt, parameter :: iphase = 1
-  PetscReal :: L_water
-  PetscReal :: molality_to_molarity
+  PetscReal :: L_water, molality_to_molarity
   PetscReal :: water_activity, aw_inhibition, tempreal
-  PetscReal :: rate_constant
-  PetscReal :: reaction_rate
+  PetscReal :: rate_constant, reaction_rate
+  PetscReal :: C_ch3oh, C_h2, C_o2
+  PetscReal :: monod_ch3oh, monod_h2, inhib_o2
 
-  ! Concentrations
-  PetscReal :: C_ch3oh, C_h2, C_ch4
-
-  ! Calculate water volume in liters
   L_water = material_auxvar%porosity*global_auxvar%sat(iphase)* &
-            material_auxvar%volume*1.d3 ! m^3 -> L
-
+            material_auxvar%volume*1.d3
   molality_to_molarity = global_auxvar%den_kg(iphase)*1.d-3
+  if (Initialized(this%fixed_water_activity)) then
+    water_activity = this%fixed_water_activity
+  else
+    water_activity = exp(rt_auxvar%ln_act_h2o)
+  endif
 
-  ! Get water activity from rt_auxvar
-  water_activity = exp(rt_auxvar%ln_act_h2o)
-
-  ! Apply temperature correction if specified
   rate_constant = this%rate_constant
   if (Initialized(this%activation_energy)) then
     rate_constant = rate_constant * Arrhenius(this%activation_energy, &
@@ -260,24 +280,36 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
                                             this%reference_temperature)
   endif
 
-  ! Get aqueous concentrations (convert from molality to molarity)
   C_ch3oh = rt_auxvar%pri_molal(this%i_ch3oh) * &
             rt_auxvar%pri_act_coef(this%i_ch3oh) * molality_to_molarity
   C_h2 = rt_auxvar%pri_molal(this%i_h2) * &
          rt_auxvar%pri_act_coef(this%i_h2) * molality_to_molarity
-  C_ch4 = rt_auxvar%pri_molal(this%i_ch4) * &
-          rt_auxvar%pri_act_coef(this%i_ch4) * molality_to_molarity
+  C_o2 = rt_auxvar%pri_molal(this%i_o2) * &
+         rt_auxvar%pri_act_coef(this%i_o2) * molality_to_molarity
 
-  ! Calculate water activity inhibition
+  if (C_ch3oh < this%threshold_ch3oh .or. C_h2 < this%threshold_h2) return
+
+  monod_ch3oh = C_ch3oh / (this%half_saturation_ch3oh + C_ch3oh)
+  monod_h2 = C_h2 / (this%half_saturation_h2 + C_h2)
+  inhib_o2 = this%o2_inhibition / (this%o2_inhibition + C_o2)
+
   select case(this%inhibition_type)
     case(AWINHIBITMETHYL_SMOOTHSTEP_INHIBITION)
-      ! Smooth transition around threshold
+      ! Positive threshold => INHIBIT_BELOW: factor -> 1 as a_w rises (wet on).
+      ! Interval from AW_SMOOTHSTEP_INTERVAL (see generator.constants).
       call ReactionInhibitionSmoothstep(water_activity, this%aw_threshold, &
-                                        0.05d0, aw_inhibition, tempreal)
-      ! For smoothstep, we want inhibition when aw < threshold, so invert
-      aw_inhibition = 1.d0 - aw_inhibition
+                                        AW_SMOOTHSTEP_INTERVAL, aw_inhibition, &
+                                        tempreal)
+    case(AWINHIBITMETHYL_ONE_MINUS_AW_INHIBITION)
+      if (this%aw_threshold >= 1.d0) then
+        aw_inhibition = 1.d0
+      else if (water_activity <= this%aw_threshold) then
+        aw_inhibition = 0.d0
+      else
+        aw_inhibition = (water_activity - this%aw_threshold) / &
+                        (1.d0 - this%aw_threshold)
+      endif
     case(AWINHIBITMETHYL_THRESHOLD_INHIBITION)
-      ! Sharp threshold
       if (water_activity < this%aw_threshold) then
         aw_inhibition = 0.d0
       else
@@ -285,24 +317,13 @@ subroutine AWInhibitMethylEvaluate(this,Residual,Jacobian,compute_derivative, &
       endif
   end select
 
-  ! Calculate reaction rate: CH3OH + H2(aq) -> CH4(aq) + H2O
-  ! Rate law assumes first order in each reactant
-  reaction_rate = rate_constant * C_ch3oh * C_h2 * aw_inhibition
-  
-  ! Apply water activity inhibition
-  reaction_rate = reaction_rate * L_water  ! Convert to mol/sec
+  reaction_rate = rate_constant * monod_ch3oh * monod_h2 * inhib_o2 * &
+                  aw_inhibition
+  reaction_rate = reaction_rate * L_water
 
-  ! Update residuals (negative stoichiometry for reactants, positive for products)
-  ! 1 CH3OH consumed
   Residual(this%i_ch3oh) = Residual(this%i_ch3oh) + reaction_rate
-  
-  ! 1 H2(aq) consumed
   Residual(this%i_h2) = Residual(this%i_h2) + reaction_rate
-  
-  ! 1 CH4(aq) produced
   Residual(this%i_ch4) = Residual(this%i_ch4) - reaction_rate
-
-  ! Note: H2O is not tracked as it's the solvent
 
   if (compute_derivative) then
     option%io_buffer = 'REACTION_SANDBOX AWINHIBITMETHYL must be run with &
@@ -317,14 +338,9 @@ end subroutine AWInhibitMethylEvaluate
 ! ************************************************************************** !
 
 subroutine AWInhibitMethylDestroy(this)
-  !
-  ! Destroys allocatable or pointer objects created in this module
-  !
 
   implicit none
   class(reaction_sandbox_awinhibitmethyl_type) :: this
-
-  ! Nothing to deallocate in this simple version
 
 end subroutine AWInhibitMethylDestroy
 

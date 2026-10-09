@@ -18,6 +18,7 @@ import argparse
 # Add the master_input_generator directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "generator"))
 from pflotran_py.generator import PFLOTRANGenerator  # noqa: E402
+from pflotran_py.generator.constants import AW_CRIT_HYDROGENOTROPHIC  # noqa: E402
 
 # Seawater baseline concentrations [mol/L] at 1× salinity
 # Ref: Millero (2013) Chemical Oceanography, Table 2.1
@@ -95,7 +96,15 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="modified_pflotran_files")
     parser.add_argument("--min-multiplier", type=int, default=1)
     parser.add_argument("--max-multiplier", type=int, default=20)
-    parser.add_argument("--aw-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--aw-threshold",
+        type=float,
+        default=AW_CRIT_HYDROGENOTROPHIC,
+        help=(
+            "AWINHIBIT a_crit fallback "
+            f"(default {AW_CRIT_HYDROGENOTROPHIC} from generator.constants)."
+        ),
+    )
     parser.add_argument("--dimensions", default="1d", choices=["1d", "2d", "3d"])
     parser.add_argument("--temperature", type=float, default=8.0)
     args = parser.parse_args()
