@@ -13,6 +13,7 @@ import re
 
 import pytest
 
+from pflotran_py.comparison.decks import one_minus_aw_factor
 from pflotran_py.generator.bottle_generator import BottleGenerator
 from pflotran_py.generator.constants import (
     AW_CRIT_ACETOCLASTIC,
@@ -20,14 +21,6 @@ from pflotran_py.generator.constants import (
     AW_CRIT_METHYLOTROPHIC,
     AW_INHIBITION_TYPE,
 )
-
-
-def one_minus_aw(water_activity: float, a_crit: float) -> float:
-    if a_crit >= 1.0:
-        return 1.0
-    if water_activity <= a_crit:
-        return 0.0
-    return (water_activity - a_crit) / (1.0 - a_crit)
 
 
 @pytest.mark.parametrize(
@@ -43,7 +36,12 @@ def one_minus_aw(water_activity: float, a_crit: float) -> float:
 )
 def test_one_minus_aw_factors_at_a_crit_0_80(a_w, expected):
     """Shape check at a_crit = 0.80, independent of the comparison default."""
-    assert one_minus_aw(a_w, 0.80) == expected
+    assert one_minus_aw_factor(a_w, 0.80) == expected
+
+
+@pytest.mark.parametrize("a_w", [0.0, 0.9, 1.0])
+def test_one_minus_aw_at_unit_threshold_is_fully_inhibited(a_w):
+    assert one_minus_aw_factor(a_w, 1.0) == 0.0
 
 
 def test_comparison_default_emits_one_minus_aw():

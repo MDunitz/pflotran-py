@@ -63,9 +63,7 @@ def one_minus_aw_factor(water_activity, a_crit):
     """Same factor as AWINHIBIT sandboxes: max(0, (a_w - a_crit) / (1 - a_crit))."""
     a_w = float(water_activity)
     crit = float(a_crit)
-    if crit >= 1.0:
-        return 1.0
-    if a_w <= crit:
+    if crit >= 1.0 or a_w <= crit:
         return 0.0
     return (a_w - crit) / (1.0 - crit)
 

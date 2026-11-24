@@ -355,7 +355,7 @@ subroutine AWInhibitEvaluate(this,Residual,Jacobian,compute_derivative, &
       ! Compatible-solute / turgor cost rises with (1 - a_w). Linear map from
       ! a_crit (rate zero) to a_w = 1 (rate uninhibited).
       if (this%aw_threshold >= 1.d0) then
-        aw_inhibition = 1.d0
+        aw_inhibition = 0.d0
       else if (water_activity <= this%aw_threshold) then
         aw_inhibition = 0.d0
       else

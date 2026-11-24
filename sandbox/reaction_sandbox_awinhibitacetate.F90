@@ -325,7 +325,7 @@ subroutine AWInhibitAcetateEvaluate(this,Residual,Jacobian,compute_derivative, &
                                         tempreal)
     case(AWINHIBITACETATE_ONE_MINUS_AW_INHIBITION)
       if (this%aw_threshold >= 1.d0) then
-        aw_inhibition = 1.d0
+        aw_inhibition = 0.d0
       else if (water_activity <= this%aw_threshold) then
         aw_inhibition = 0.d0
       else
