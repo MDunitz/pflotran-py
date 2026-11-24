@@ -419,7 +419,7 @@ def forecast_experiment(
     )
 
     scored = []
-    for (aw_h2, aw_methyl, aw_acetate), series in grid.items():
+    for key, series in grid.items():
         if score_flux:
             value, count = score_flux_window(
                 series, observed, fit_flux_pairs, anchor_day=anchor_day
@@ -428,19 +428,21 @@ def forecast_experiment(
             value, count = score_window(
                 series, observed, fit_days, anchor_day=anchor_day
             )
-        scored.append((value, aw_h2, aw_methyl, aw_acetate, count))
-    fit_score, aw_h2, aw_methyl, aw_acetate, fit_count = min(scored)
+        scored.append((value, key, count))
+    fit_score, winning_key, fit_count = min(scored)
+    aw_h2, aw_methyl, aw_acetate, _, _ = winning_key
+    winning = grid[winning_key]
 
     if score_flux:
         predict_score, predict_count = score_flux_window(
-            grid[(aw_h2, aw_methyl, aw_acetate)],
+            winning,
             observed,
             predict_flux_pairs,
             anchor_day=anchor_day,
         )
     else:
         predict_score, predict_count = score_window(
-            grid[(aw_h2, aw_methyl, aw_acetate)],
+            winning,
             observed,
             predict_days,
             anchor_day=anchor_day,
@@ -490,7 +492,7 @@ def forecast_experiment(
         experiment,
         batches,
         observed,
-        grid[(aw_h2, aw_methyl, aw_acetate)],
+        winning,
         fit_days,
         predict_days,
         aw_h2,
@@ -510,10 +512,12 @@ def forecast_experiment(
                 "aw_threshold_h2": h2,
                 "aw_threshold_methyl": methyl,
                 "aw_threshold_acetate": acetate,
+                "aw_threshold_fermentation": ferment,
+                "aw_threshold_hydrolysis": hydro,
                 "fit score": value,
                 "points": count,
             }
-            for value, h2, methyl, acetate, count in scored
+            for value, (h2, methyl, acetate, ferment, hydro), count in scored
         ]
     ).sort_values("fit score").to_csv(
         os.path.join(directory, "fit_grid.csv"), index=False
@@ -524,9 +528,9 @@ def forecast_experiment(
         if anchor_day > 0 and row["day"] <= anchor_day:
             continue
         batch_id = int(row["Batch ID"])
-        if batch_id not in grid[(aw_h2, aw_methyl, aw_acetate)]:
+        if batch_id not in winning:
             continue
-        model_days, model_moles = grid[(aw_h2, aw_methyl, aw_acetate)][batch_id]
+        model_days, model_moles = winning[batch_id]
         sim_day = float(row["day"]) - float(anchor_day)
         modelled = float(model_at_days(model_days, model_moles, sim_day))
         measured_value = float(row["Cumulative Moles"])
@@ -553,7 +557,6 @@ def forecast_experiment(
     if score_flux:
         interval_records = []
         lookup = observed_by_batch(observed)
-        winning = grid[(aw_h2, aw_methyl, aw_acetate)]
         for batch_id, (model_days, model_moles) in winning.items():
             batch_measured = lookup.get(batch_id, {})
             for t0, t1 in all_flux_pairs:
