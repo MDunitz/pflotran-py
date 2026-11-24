@@ -148,7 +148,9 @@ def correct_sea_salt_makeup_volume(brines):
 SOLUBILITY_G_PER_G_WATER = {
     "Artificial Sea Salt (g)": 0.46,  # ~78% NaCl mix
     "NaCl (g)": 0.36,
-    "MgCl2*6H2O (g)": 1.17,  # 54.6 g anhydrous MgCl2 per 100 g water
+    # Convert anhydrous MgCl2 saturation (0.546 g/g total water) to
+    # hydrate mass per gram of added water, accounting for crystal water.
+    "MgCl2*6H2O (g)": (0.546 * 203.30 / 95.21) / (1 - 0.546 * 108.09 / 95.21),
 }
 
 _SALT_COLUMNS_FOR_MASS = [
