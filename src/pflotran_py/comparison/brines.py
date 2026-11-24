@@ -56,7 +56,7 @@ from ..geochem.constants import (
     SALT_DISSOCIATION,
     SEA_SALT_ION_MASS_FRACTION,
 )
-from .corrections import check_mass_balance, correct_sea_salt_makeup_volume
+from .corrections import check_mass_balance, correct_sea_salt_mass
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def fetch_brines(apply_corrections=True):
         :mod:`pflotran_py.comparison.corrections` before returning. On by
         default because the uncorrected sheet contains four sea-salt recipes
         that are physically impossible, and building decks from them would put
-        four conditions at roughly a fifth of their true salinity without
+        four conditions at roughly five times the inferred sea-salt concentration without
         anything failing loudly.
 
         Pass ``False`` to see the sheet exactly as recorded, which is what you
@@ -119,7 +119,7 @@ def fetch_brines(apply_corrections=True):
     brines = pd.read_csv(_sheet_url(BATCH_WORKBOOK_ID, BRINES_TAB_GID))
     brines = brines.dropna(subset=["Brine ID"])
     if apply_corrections:
-        brines = correct_sea_salt_makeup_volume(brines)
+        brines = correct_sea_salt_mass(brines)
     return brines
 
 

@@ -14,125 +14,42 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Brines whose recorded make-up volume is contradicted by three independent
-# measurements. See correct_sea_salt_makeup_volume for the evidence.
-_SEA_SALT_VOLUME_CORRECTION = {
-    "SW_M": 1000.0,
-    "SWSu_M": 1000.0,
-    "SW_L": 1000.0,
-    "SWSu_L": 1000.0,
+# Recorded and inferred sea-salt masses in grams for the 200 mL recipes.
+_SEA_SALT_MASS_CORRECTIONS = {
+    "SW_M": (200.0, 40.0),
+    "SWSu_M": (200.0, 40.0),
+    "SW_L": (100.0, 20.0),
+    "SWSu_L": (100.0, 20.0),
 }
 
-_RECORDED_SEA_SALT_VOLUME_ML = 200.0
 
+def correct_sea_salt_mass(brines):
+    """Apply the inferred sea-salt masses while retaining volume and sulfate.
 
-def correct_sea_salt_makeup_volume(brines):
-    """Correct the make-up volume of four sea-salt brines from 200 to 1000 mL.
-
-    The Brines tab records SW_M, SWSu_M, SW_L and SWSu_L as made up to 200 mL.
-    Three independent lines of evidence say the volume was 1000 mL and that the
-    recorded 200 is a transcription error.
-
-    **1. The recorded recipe is physically impossible.** Mass balance fixes the
-    water content of a solution without any fitted parameter: a solution of
-    density rho occupying volume V has total mass rho*V, so the water in it is
-    rho*V minus the salt. For SW_M that is 1.1097 g/mL times 200 mL minus 200 g
-    of salt, leaving 21.9 g of water to dissolve 200 g of sea salt -- a ratio of
-    9.1 g of salt per gram of water. A sea-salt mix is roughly 78 percent sodium
-    chloride, which alone saturates at 0.36 g per gram of water, so the mix
-    saturates near 0.46. The recorded SW_L and SWSu_L recipes are likewise
-    impossible at about 0.90. The two undisputed sea-salt brines, SW_H and
-    SWSu_H, sit at 0.343 and 0.353, just under saturation, which is what a brine
-    named "high" should look like.
-
-    **2. The measured density implies a volume near 1000 mL.** Over this range
-    density is linear in concentration, ``rho = rho_water + c*(1 - rho_water*v)``
-    where ``v`` is the salt's apparent specific volume. Calibrating ``v`` on the
-    two undisputed sea-salt brines gives 0.433 mL/g, and inverting for the four
-    disputed ones yields make-up volumes of 1018, 1003, 943 and 905 mL against a
-    recorded 200.
-
-    That method was validated on the six brines whose volumes are not in
-    question. Calibrated on the most concentrated member of each family, it
-    reproduces the others' measured densities to within 0.62 percent for sodium
-    chloride and 0.28 percent for magnesium chloride. A method accurate to under
-    one percent on brines of known volume, disagreeing by a factor of five on
-    these four, is not being defeated by measurement error.
-
-    **3. Independently measured water activity agrees, and the recorded
-    recipe contradicts it.** Water activity is measured on a different
-    instrument from both the balance and the densitometer. Ranking the six
-    sea-salt brines by measured water activity against the density-implied
-    concentration gives a Spearman correlation of -0.986: more salt, less
-    available water, as it must be. Ranking against the *recorded*
-    concentration gives +0.406 -- the wrong sign, which would mean adding salt
-    raises water activity.
-
-    The series also contains three matched pairs, each a plain brine and its
-    sulfate-spiked twin. Under the corrected volumes the members of each pair
-    agree to within 4 percent in density-implied concentration and to within
-    0.001 in measured water activity. Two independent instruments agreeing
-    pair-by-pair across three pairs is not something a wrong volume produces by
-    chance.
-
-    Together the corrected volumes complete the concentration series the
-    experiment was evidently designed around: 0.3, 0.2 and 0.1 g/mL, from
-    300, 200 and 100 g of salt made up to a common litre.
-
-    What this evidence does *not* settle
-    ------------------------------------
-    Density and mass balance both constrain the *concentration*, not the split
-    between mass and volume that produced it. A recipe of 200 g in 1000 mL and
-    one of 40 g in 200 mL are the same solution and cannot be told apart this
-    way. The volume is corrected rather than the mass for two reasons: 300, 200
-    and 100 g made up to a common volume is the obvious reading of the design,
-    and the note recorded against SWSu_M describes adding 133 mL of a sulfate
-    sub-solution, which cannot fit inside a 200 mL final volume alongside 200 g
-    of salt.
-
-    For the model this distinction does not matter at all -- only the resulting
-    concentration enters a PFLOTRAN deck. It matters for the bench record,
-    which is why it is stated rather than glossed.
-
-    Parameters
-    ----------
-    brines : pandas.DataFrame
-        The Brines tab as read from the sheet.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A copy with ``Final Volume (mL)`` corrected for the four affected
-        brines. Rows are matched by ``Brine Name`` and only rows still carrying
-        the erroneous 200 mL are touched, so re-running is a no-op and a
-        corrected sheet is left alone.
+    Density and measured water activity support a fivefold reduction in
+    sea-salt concentration. The SWSu_M stock and top-up recorded in issue
+    #42 support the 200 mL interpretation. SWSu_L retains the sheet's
+    nominal sulfate mass because the actual addition is unresolved.
     """
     corrected = brines.copy()
+    salt_column = "Artificial Sea Salt (g)"
+    if salt_column not in corrected:
+        return corrected
 
-    for brine_name, volume_ml in _SEA_SALT_VOLUME_CORRECTION.items():
-        match = corrected["Brine Name"] == brine_name
-        if not match.any():
-            continue
-
-        already_right = corrected.loc[match, "Final Volume (mL)"] != (
-            _RECORDED_SEA_SALT_VOLUME_ML
+    for name, (recorded_mass, inferred_mass) in _SEA_SALT_MASS_CORRECTIONS.items():
+        match = (
+            (corrected["Brine Name"] == name)
+            & (corrected["Final Volume (mL)"] == 200.0)
+            & (corrected[salt_column] == recorded_mass)
         )
-        if already_right.all():
-            logger.debug(
-                "Brine %s already carries a corrected volume; leaving it alone.",
-                brine_name,
+        if match.any():
+            corrected.loc[match, salt_column] = inferred_mass
+            logger.info(
+                "Corrected %s sea-salt mass: %.0f g -> %.0f g at 200 mL",
+                name,
+                recorded_mass,
+                inferred_mass,
             )
-            continue
-
-        corrected.loc[match, "Final Volume (mL)"] = volume_ml
-        logger.info(
-            "Corrected %s make-up volume: %.0f mL -> %.0f mL "
-            "(recorded volume is contradicted by mass balance, measured "
-            "density and measured water activity)",
-            brine_name,
-            _RECORDED_SEA_SALT_VOLUME_ML,
-            volume_ml,
-        )
 
     return corrected
 

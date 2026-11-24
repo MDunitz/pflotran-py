@@ -14,7 +14,7 @@ import pytest
 from pflotran_py.comparison.corrections import (
     SOLUBILITY_G_PER_G_WATER,
     check_mass_balance,
-    correct_sea_salt_makeup_volume,
+    correct_sea_salt_mass,
 )
 
 AFFECTED = ["SW_M", "SWSu_M", "SW_L", "SWSu_L"]
@@ -28,10 +28,30 @@ def _sheet():
             {"Brine Name": "Su_C", "Final Volume (mL)": 200.0},
             {"Brine Name": "SW_H", "Final Volume (mL)": 1000.0},
             {"Brine Name": "SWSu_H", "Final Volume (mL)": 400.0},
-            {"Brine Name": "SW_M", "Final Volume (mL)": 200.0},
-            {"Brine Name": "SWSu_M", "Final Volume (mL)": 200.0},
-            {"Brine Name": "SW_L", "Final Volume (mL)": 200.0},
-            {"Brine Name": "SWSu_L", "Final Volume (mL)": 200.0},
+            {
+                "Brine Name": "SW_M",
+                "Final Volume (mL)": 200.0,
+                "Artificial Sea Salt (g)": 200.0,
+                "NaSO4 (g)": 0.0,
+            },
+            {
+                "Brine Name": "SWSu_M",
+                "Final Volume (mL)": 200.0,
+                "Artificial Sea Salt (g)": 200.0,
+                "NaSO4 (g)": 0.795,
+            },
+            {
+                "Brine Name": "SW_L",
+                "Final Volume (mL)": 200.0,
+                "Artificial Sea Salt (g)": 100.0,
+                "NaSO4 (g)": 0.0,
+            },
+            {
+                "Brine Name": "SWSu_L",
+                "Final Volume (mL)": 200.0,
+                "Artificial Sea Salt (g)": 100.0,
+                "NaSO4 (g)": 0.795,
+            },
             {"Brine Name": "Na_H", "Final Volume (mL)": 500.0},
             {"Brine Name": "Na_M", "Final Volume (mL)": 200.0},
             {"Brine Name": "Na_L", "Final Volume (mL)": 200.0},
@@ -48,12 +68,14 @@ def _sheet():
 
 
 @pytest.mark.parametrize("brine_name", AFFECTED)
-def test_affected_brines_are_corrected_to_a_litre(brine_name):
-    corrected = correct_sea_salt_makeup_volume(_sheet())
-    volume = corrected.loc[
-        corrected["Brine Name"] == brine_name, "Final Volume (mL)"
-    ].iloc[0]
-    assert volume == 1000.0
+def test_affected_brines_keep_volume_and_sulfate(brine_name):
+    recorded = _sheet().set_index("Brine Name").loc[brine_name]
+    corrected = correct_sea_salt_mass(_sheet()).set_index("Brine Name").loc[brine_name]
+    assert (
+        corrected["Artificial Sea Salt (g)"] == recorded["Artificial Sea Salt (g)"] / 5
+    )
+    assert corrected["Final Volume (mL)"] == recorded["Final Volume (mL)"]
+    assert corrected["NaSO4 (g)"] == recorded["NaSO4 (g)"]
 
 
 @pytest.mark.parametrize("brine_name", UNAFFECTED)
@@ -62,7 +84,7 @@ def test_every_other_brine_is_left_alone(brine_name):
     correction is scoped by name, not by matching the erroneous value, so a
     brine that legitimately holds 200 mL is never touched."""
     original = _sheet()
-    corrected = correct_sea_salt_makeup_volume(original)
+    corrected = correct_sea_salt_mass(original)
     before = original.loc[
         original["Brine Name"] == brine_name, "Final Volume (mL)"
     ].iloc[0]
@@ -74,16 +96,18 @@ def test_every_other_brine_is_left_alone(brine_name):
 
 def test_correction_does_not_mutate_its_input():
     original = _sheet()
-    correct_sea_salt_makeup_volume(original)
+    correct_sea_salt_mass(original)
     assert (
-        original.loc[original["Brine Name"] == "SW_M", "Final Volume (mL)"].iloc[0]
+        original.loc[original["Brine Name"] == "SW_M", "Artificial Sea Salt (g)"].iloc[
+            0
+        ]
         == 200.0
     )
 
 
 def test_correction_is_idempotent():
-    once = correct_sea_salt_makeup_volume(_sheet())
-    twice = correct_sea_salt_makeup_volume(once)
+    once = correct_sea_salt_mass(_sheet())
+    twice = correct_sea_salt_mass(once)
     pd.testing.assert_frame_equal(once, twice)
 
 
@@ -91,23 +115,23 @@ def test_correction_is_a_no_op_on_a_sheet_fixed_at_source():
     """When the sheet itself is corrected, this should stop firing rather than
     keep announcing a change it did not make."""
     fixed = _sheet()
-    fixed.loc[fixed["Brine Name"].isin(AFFECTED), "Final Volume (mL)"] = 1000.0
-    with_logging = correct_sea_salt_makeup_volume(fixed)
+    fixed.loc[fixed["Brine Name"].isin(AFFECTED), "Artificial Sea Salt (g)"] /= 5
+    with_logging = correct_sea_salt_mass(fixed)
     pd.testing.assert_frame_equal(with_logging, fixed)
 
 
 def test_correction_announces_itself(caplog):
     """A silent rewrite of laboratory data would be worse than no correction."""
     with caplog.at_level(logging.INFO):
-        correct_sea_salt_makeup_volume(_sheet())
-    assert sum("make-up volume" in record.message for record in caplog.records) == len(
+        correct_sea_salt_mass(_sheet())
+    assert sum("sea-salt mass" in record.message for record in caplog.records) == len(
         AFFECTED
     )
 
 
 def test_correction_tolerates_a_missing_brine():
     partial = pd.DataFrame([{"Brine Name": "SW_H", "Final Volume (mL)": 1000.0}])
-    assert len(correct_sea_salt_makeup_volume(partial)) == 1
+    assert len(correct_sea_salt_mass(partial)) == 1
 
 
 # ─────────────────────────────────────────────────────────────────────
