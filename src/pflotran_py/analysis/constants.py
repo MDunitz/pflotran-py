@@ -4,6 +4,10 @@ Separated from ``config.py`` (runtime pipeline settings: species map,
 temperature, output paths) because these are fixed physical/empirical values
 with literature provenance rather than tunable configuration. All values carry
 ``astropy.units`` so their dimensions travel with them.
+
+Deck-generator kinetic defaults (AWINHIBIT ``a_crit``, inhibition type) live
+in ``pflotran_py.generator.constants``, next to the code that writes ``.in``
+files.
 """
 
 from astropy import units as u

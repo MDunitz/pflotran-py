@@ -1,0 +1,26 @@
+kind,id,x,y,title,subtitle,role,width,height,fontsize,source,target,source_side,target_side,curve,route,edge_role
+node,chemistry,2.8,8.65,Chemistry,"species, reactions, rate constants, inhibition",input,4.3,0.92,9,,,,,
+node,domain,8.0,8.65,Domain and conditions,"grid, geometry, time, initial and boundary conditions",input,4.6,0.92,9,,,,,
+node,sweep,13.2,8.65,What varies,"one generated deck per condition",input,4.2,0.92,9,,,,,
+node,generate,8.0,7.05,Generate PFLOTRAN decks,"generator/  ->  one .in file per condition",core,5.6,1.0,10,,,,,
+node,sandbox,2.4,6.15,Custom reaction sandbox,"sandbox/*.F90  |  compiled into PFLOTRAN",optional,3.8,0.96,8.5,,,,,
+node,run,8.0,5.35,Execute the generated decks,"batch runner or container workflow; retain logs and outputs",core,5.6,1.0,9.2,,,,,
+node,engine,13.6,5.35,PFLOTRAN and chemistry database,"external simulator and thermodynamic data",external,3.8,1.0,8.5,,,,,
+node,extract,8.0,3.75,Read output into analysis tables,"analysis/extract.py (.tec)  |  extract_hdf5.py (.h5)",core,5.6,0.92,9,,,,,
+node,spatial,2.15,2.0,Spatial analysis,"gradients, diffusive flux, spatial views",core,3.1,0.92,8.3,,,,,
+node,temporal,5.85,2.0,Time-series analysis,"concentrations and fluxes over time",core,3.1,0.92,8.3,,,,,
+node,runs,9.55,2.0,Compare simulation runs,"inspect differences across conditions",core,3.1,0.92,8.3,,,,,
+node,measurements,13.25,2.0,Compare with measurements,"optional; study-specific",optional,3.1,0.92,8.3,,,,,
+node,example,4.9,0.62,Worked example: saline biomass storage,"Study-specific modules include comparison/brines.py, comparison/decks.py, and comparison/headspace.py",example,9.5,0.9,8.2,,,,,
+edge,e1,,,,,,,,,chemistry,generate,bottom,top,0
+edge,e2,,,,,,,,,domain,generate,bottom,top,0
+edge,e3,,,,,,,,,sweep,generate,bottom,top,0
+edge,e4,,,,,,,,,generate,run,bottom,top,0
+edge,e5,,,,,,,,,sandbox,run,right,left,0
+edge,e6,,,,,,,,,engine,run,left,right,0
+edge,e7,,,,,,,,,run,extract,bottom,top,0
+edge,e8,,,,,,,,,extract,spatial,bottom,top,0.08
+edge,e9,,,,,,,,,extract,temporal,bottom,top,0.025
+edge,e10,,,,,,,,,extract,runs,bottom,top,-0.025
+edge,e11,,,,,,,,,extract,measurements,bottom,top,-0.08
+edge,e12,,,,,,,,,measurements,sweep,top,right,-0.3,outside_right,input

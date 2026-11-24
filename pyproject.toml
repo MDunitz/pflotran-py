@@ -12,6 +12,7 @@ dependencies = [
     "pandas",
     "scipy",
     "astropy",
+    "phreeqpython",
     "h5py",
     "bokeh",
     "plotly",

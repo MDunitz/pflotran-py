@@ -1,0 +1,22 @@
+{
+  "_provenance": "Anchors are the Okabe-Ito colorblind-safe values adopted repo-wide in saltyBiomass (experiments/analysis/incubations/constants.py, BATCH_PALETTE). Do not invent values outside this file.",
+
+  "_concept_salt_family": "Hue family encodes which salt the brine was made from. One hue per salt; intensity within a hue encodes concentration (dark = more salt, light = less).",
+  "control": "#000000",
+  "nacl_high": "#00426B",
+  "nacl_mid": "#0072B2",
+  "nacl_low": "#56B4E9",
+  "mgcl2_high": "#8A3D00",
+  "mgcl2_mid": "#D55E00",
+  "mgcl2_low": "#FF9E5C",
+  "seasalt_high": "#005340",
+  "seasalt_mid": "#009E73",
+  "seasalt_low": "#5FD9B4",
+
+  "_concept_source": "Measured and modelled values are distinguished by mark, not hue: filled circles for the instrument, solid lines for the model. This keeps hue free to carry the salt condition, so a reader learns one colour key for the whole figure set.",
+
+  "_concept_annotation": "Neutral greys for reference lines, thresholds and guides, so they never compete with data.",
+  "guide": "#666666",
+  "guide_light": "#BBBBBB",
+  "emphasis": "#CC79A7"
+}

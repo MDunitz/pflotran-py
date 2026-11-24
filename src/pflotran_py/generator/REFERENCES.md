@@ -95,10 +95,22 @@ Seawater Cl⁻ at 1× = 0.536 M → already above threshold at baseline.
 
 ### Water Activity (a_w) Inhibition
 Custom Fortran reaction sandboxes (AWINHIBIT, AWINHIBITACETATE, AWINHIBITMETHYL)
-apply a_w threshold of 0.5. Water activity captures the combined effect of all dissolved
-ions (not just Cl⁻), making it a more physically complete inhibition mechanism.
+scale methanogenesis by water activity. Defaults live in
+`generator/constants.py` (`AW_CRIT_*`):
 
-**Potential double-counting concern:** See design note in PR #50 review.
+| Pathway | a_crit | Why |
+|---------|--------|-----|
+| Hydrogenotrophic | 0.80 | Floor just below the driest Exp003/Exp004 bottle (0.824) |
+| Methylotrophic | 0.85 | Between acetoclastic and hydrogenotrophic |
+| Acetoclastic | 0.90 | Most salt-sensitive of the three (Oren 1999, 2011) |
+
+Higher a_crit means the pathway shuts off at wetter a_w. The ordering is
+literature (acetoclasts fail first); the round numbers span the bottle
+meter range and are not fitted to methane. See `constants.py` for full
+citations (Oren 1999, 2011; McGenity 2010).
+
+**Potential double-counting concern:** chloride Monod + a_w sandboxes both
+on. Comparison decks use `--no-cl-inhibition`.
 
 ## Literature Cited
 
@@ -115,6 +127,16 @@ ions (not just Cl⁻), making it a more physically complete inhibition mechanism
   e2023JG007633. https://doi.org/10.1029/2023JG007633
   - GitHub: https://github.com/omearata/REDOX-PFLOTRAN
   - Data: https://data.ess-dive.lbl.gov/datasets/doi:10.15485/2294096
+
+- Oren, A. (1999). Bioenergetic aspects of halophilism. *Microbiol. Mol. Biol. Rev.*,
+  63(2), 334–348. https://doi.org/10.1128/MMBR.63.2.334-348.1999
+
+- Oren, A. (2011). Thermodynamic limits to microbial life at high salt concentrations.
+  *Environ. Microbiol.*, 13(8), 1908–1923. https://doi.org/10.1111/j.1462-2920.2010.02365.x
+
+- McGenity, T.J. (2010). Methanogens and methanogenesis in hypersaline environments.
+  In Timmis, K.N. (ed.), *Handbook of Hydrocarbon and Lipid Microbiology*. Springer.
+  https://doi.org/10.1007/978-3-540-77587-4_52
 
 - Sander, R. (2023). Compilation of Henry's law constants (version 5.0.0) for water as
   solvent. *Atmos. Chem. Phys.*, 23, 10901–12440.

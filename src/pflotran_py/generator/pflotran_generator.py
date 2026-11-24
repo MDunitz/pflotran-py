@@ -5,9 +5,12 @@ Generates .in files for PFLOTRAN reactive transport simulations of
 microbial redox networks in saline environments.
 
 Usage:
+    from pflotran_py.generator.constants import AW_CRIT_HYDROGENOTROPHIC
+
     generator = PFLOTRANGenerator(
         concentrations={'Cl-': '2.68 T', 'Na+': '2.295 T'},
-        aw_threshold=0.6,
+        # Defaults are AW_CRIT_* from generator.constants (H 0.80 / M 0.85 / A 0.90).
+        aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
         dimensions='1d',
     )
     generator.generate('my_simulation.in')
@@ -22,6 +25,12 @@ Sources:
 
 from datetime import datetime
 
+from .constants import (
+    AW_CRIT_ACETOCLASTIC,
+    AW_CRIT_HYDROGENOTROPHIC,
+    AW_CRIT_METHYLOTROPHIC,
+    AW_INHIBITION_TYPE,
+)
 from .pflotran_templates import (
     HEADER,
     PRIMARY_SPECIES,
@@ -149,6 +158,46 @@ TRACE_SPECIES = [
 #     2. Time-varying FLOW_CONDITION / TRANSPORT_CONDITION if tidal
 #     3. Possibly multiple MATERIAL_PROPERTY zones (e.g. root zone vs bulk)
 #     4. Region definitions for the lateral boundaries
+# Rate keys of the reactions that produce methane. A salinity inhibition term
+# has to be attached to these to have any effect on modelled methane; attaching
+# it anywhere else -- as the AWINHIBIT sandboxes effectively do -- leaves the
+# production pathways untouched.
+# Solid carbon pool that hydrolyses to dissolved organic matter. The mineral
+# and its reaction are already in hanford.dat; only the kinetics and the
+# starting inventory are set here.
+#
+# volume_fraction is matched to the incubations' recipe-derived starting carbon
+# (~0.0565 mol C / bottle for Exp003/Exp004; see comparison.carbon_inventory).
+# At the mineral's 162.14 cm3/mol molar volume that is VF ≈ 0.0122, not the
+# earlier 0.2 (~0.925 mol C) which over-supplied carbon by ~16×. This is
+# inventory normalisation, not a kinetics fit.
+DEFAULT_CELLULOSE_HYDROLYSIS = {
+    "mineral": "Cellulose_min",
+    "volume_fraction": 0.012182,
+    "surface_area": "1.0e2",
+    # Chosen so that hydrolysis supplies carbon on the same timescale the
+    # network consumes it, rather than instantly. This is the parameter that
+    # makes hydrolysis rate-limiting, which is the point of the change.
+    #
+    # Tuned by sweep at the previous (unmatched) inventory. At 2.d-7 the
+    # dissolved pool still reaches 0.57 mol/L and keeps depressing water
+    # activity; at 2.d-10 carbon supply itself becomes the limit and modelled
+    # methane falls fivefold. At 2.d-8 the unsalted bottle holds 0.032 mol/L
+    # of dissolved organic matter, which is what an active sludge porewater
+    # looks like, and its water activity comes out at 0.9927 against a
+    # measured 1.000. Re-check a_w and DOC after changing volume_fraction.
+    "rate_constant": "2.d-8",
+    # What remains dissolved. Millimolar rather than molar, which is what
+    # sludge porewater dissolved organic carbon actually looks like.
+    "dom1_initial": "1.00d-03 T",
+}
+
+METHANOGENESIS_RATE_KEYS = (
+    "methylotrophic_methano",
+    "hydrogenotrophic_methano",
+    "acetaclastic_methano",
+)
+
 GRID_PRESETS = {
     "1d": {
         "grid_cells": "1 1 10",
@@ -196,17 +245,29 @@ class PFLOTRANGenerator:
         half_saturation=None,
         thresholds=None,
         # --- Inhibition mechanism toggles ---
-        # Both ON by default (current behavior). For the double-counting
-        # diagnostic (PR #50 item 4), run three variants:
-        #   A: enable_cl_inhibition=True,  enable_aw_sandbox=False
-        #   B: enable_cl_inhibition=False, enable_aw_sandbox=True
-        #   C: enable_cl_inhibition=True,  enable_aw_sandbox=True   (default)
+        # Both ON by default for column decks. Bottle comparison uses the
+        # sandboxes as the methanogenesis mechanism (see
+        # aw_sandbox_replaces_network_methanogenesis) and typically turns
+        # enable_cl_inhibition off so salt is not double-counted via Cl-.
         enable_cl_inhibition=True,
         enable_aw_sandbox=True,
+        # When True (default), the three AWINHIBIT sandboxes carry the network
+        # Monod rate laws and the network's own methanogenesis reactions are
+        # omitted -- otherwise the two would double-produce methane. Set False
+        # only for attribution runs that need the old dead-parallel behaviour.
+        aw_sandbox_replaces_network_methanogenesis=True,
         # --- Reaction sandbox: water activity inhibition ---
-        aw_threshold=0.5,
-        aw_rate_constant=1.0e-10,
-        aw_inhibition_type="THRESHOLD",
+        # Defaults and citations: generator.constants (AW_CRIT_*).
+        # ONE_MINUS_AW maps rate to max(0,(a_w - a_crit)/(1 - a_crit)).
+        aw_threshold=AW_CRIT_HYDROGENOTROPHIC,
+        aw_threshold_acetate=AW_CRIT_ACETOCLASTIC,
+        aw_threshold_methyl=AW_CRIT_METHYLOTROPHIC,
+        aw_rate_constant=None,  # unused when per-pathway rates are emitted
+        aw_inhibition_type=AW_INHIBITION_TYPE,
+        # When set, sandboxes use this a_w instead of PFLOTRAN's ideal Raoult
+        # value. Comparison decks pass the meter-read a_w by default; the
+        # computed PHREEQC/pitzer.dat value is opt-in (--use-computed-aw).
+        fixed_water_activity=None,
         # --- Domain geometry ---
         dimensions="1d",
         # --- Simulation control ---
@@ -214,6 +275,111 @@ class PFLOTRANGenerator:
         final_time_days=31,
         initial_timestep_hours=2.0,
         max_timestep_hours=12.0,
+        # --- Chemistry configuration ---
+        # Whether dissolved carbon dioxide is held in equilibrium with the
+        # carbonate system, or carried as an independent primary species.
+        #
+        # Defaults to False, which is the historical behaviour of the sediment
+        # column decks and is left alone here so that existing column results
+        # stay reproducible.
+        #
+        # Setting it True moves CO2(aq) from the primary list to the secondary
+        # list, so PFLOTRAN computes it from bicarbonate and pH through the
+        # database reaction
+        #
+        #     CO2(aq) = HCO3- + H+ - H2O
+        #
+        # (hanford.dat, log K -6.3447 at 25 C). This matters because no reaction
+        # in the network produces CO2(aq): every carbon-oxidising step yields
+        # bicarbonate. Carried as a decoupled primary species, dissolved carbon
+        # dioxide therefore never moves from its initial value, however much
+        # carbon the organisms respire, and the model cannot predict a headspace
+        # carbon dioxide concentration at all.
+        #
+        # Note that the same argument does NOT apply to CH4(aq), whose database
+        # entry is a redox reaction rather than an acid-base one. Decoupling
+        # methane is what allows the kinetic network to produce it, and must
+        # stay.
+        couple_carbonate=False,
+        # --- Salinity inhibition on the reaction network itself ---
+        # An inhibition term added directly to the network's methanogenesis
+        # reactions, as opposed to the AWINHIBIT reaction sandboxes.
+        #
+        # This exists because the sandboxes do not inhibit the network. They add
+        # their own parallel copies of the three methanogenesis pathways and
+        # inhibit only those, at a rate constant of 1e-10 against the network's
+        # 9.1e-6 for the methylotrophic route -- roughly ninety thousand times
+        # smaller, before accounting for the sandbox's sixth-order rate law.
+        # Raising the sandbox threshold until it is fully engaged in every
+        # bottle changes the modelled methane by under one percent, because the
+        # pathway it governs produces almost none of it.
+        #
+        # Pass a dict to switch this on, for example::
+        #
+        #     {"species": "Cl-", "threshold": 1.5, "interval": 1.0}
+        #
+        # ``threshold`` is in mol/L and ``interval`` is the width of the
+        # transition in decades. TYPE SMOOTHSTEP is used rather than MONOD
+        # deliberately: Monod inhibition is hyperbolic, so the most it can
+        # deliver between the weakest and strongest brine here is roughly a
+        # factor of twenty, whereas the measurements fall by four orders of
+        # magnitude across the same range. A sigmoid can express a collapse; a
+        # hyperbola cannot, at any half-saturation value.
+        #
+        # Defaults to None, leaving every existing deck unchanged.
+        salinity_inhibition=None,
+        # --- Carbon inventory ---
+        # Where the substrate carbon lives: dissolved, or in a solid pool that
+        # hydrolyses into solution.
+        #
+        # The decks carry DOM1 at 5 mol/L. DOM1 is glucose (hanford.dat gives
+        # its molar mass as 180.1566 and labels the related solid pool
+        # "TAO-glucose"), so 5 mol/L is 901 g/L, which is glucose's solubility
+        # limit -- the bottles are modelled as saturated syrup. Two things
+        # follow, and both matter.
+        #
+        # First, PFLOTRAN computes water activity as 1 - 0.017 * sum of all
+        # solute molalities, so at 5 mol/L the glucose contributes about ninety
+        # percent of the osmolality in an unsalted bottle. The model's control
+        # sits at a water activity of 0.909 while the meter reads 1.000, and
+        # the range across all conditions is compressed from the measured 0.176
+        # to 0.099. Any inhibition keyed to water activity is therefore reading
+        # an axis set mostly by the organic pool rather than by the salt.
+        #
+        # Second, DOM1 falls only from 5.00 to 4.78 over 130 days, so it acts
+        # as an unlimited reservoir rather than a substrate, which is part of
+        # why modelled yield barely responds to inhibition.
+        #
+        # Setting this switches the carbon into a solid Cellulose_min pool that
+        # dissolves to DOM1 kinetically, leaving only a small dissolved pool.
+        # The database already carries the reaction (Cellulose_min -> 1 DOM1),
+        # so this adds no new chemistry. The default volume fraction matches
+        # Exp003/Exp004 recipe-derived starting C (~0.0565 mol); pass a dict
+        # to override any of::
+        #
+        #     {"volume_fraction": 0.012182, "surface_area": "1.0e2",
+        #      "rate_constant": "2.d-8", "dom1_initial": "1.00d-03 T"}
+        #
+        # Defaults to None, leaving the carbon inventory as it was.
+        cellulose_hydrolysis=None,
+        # --- Reactions to leave out of the deck ---
+        # Rate keys naming reactions to omit, e.g.
+        #
+        #     {"sulfate_reduction", "methane_so4_oxidation"}
+        #
+        # This exists for mechanism-attribution runs. Sulfate reducers compete
+        # with methanogens for acetate and hydrogen, and sulfate-dependent
+        # anaerobic methane oxidation consumes methane after it is made, so a
+        # sulfate-bearing brine is suppressed by those pathways in addition to
+        # any salinity inhibition. Dropping them isolates how much of the
+        # modelled suppression is competition rather than salt stress.
+        #
+        # A deck built this way is a diagnostic, not a physical model: sulfate
+        # reduction is real chemistry that these incubations undoubtedly do.
+        # Nothing here should be carried into a deck used for prediction.
+        #
+        # Defaults to None, including every reaction.
+        disabled_rate_keys=None,
         # --- Paths ---
         database_path="/home/sshindad/miniconda/pflotran/md_test_files/hanford.dat",
     ):
@@ -232,12 +398,45 @@ class PFLOTRANGenerator:
 
         # Water activity sandbox parameters
         self.aw_threshold = aw_threshold
+        # Pathway-specific a_crit overrides; None means "use aw_threshold".
+        self.aw_threshold_acetate = (
+            aw_threshold if aw_threshold_acetate is None else aw_threshold_acetate
+        )
+        self.aw_threshold_methyl = (
+            aw_threshold if aw_threshold_methyl is None else aw_threshold_methyl
+        )
         self.aw_rate_constant = aw_rate_constant
         self.aw_inhibition_type = aw_inhibition_type
+        self.fixed_water_activity = fixed_water_activity
 
         # Inhibition mechanism toggles
         self.enable_cl_inhibition = enable_cl_inhibition
         self.enable_aw_sandbox = enable_aw_sandbox
+        self.aw_sandbox_replaces_network_methanogenesis = (
+            aw_sandbox_replaces_network_methanogenesis
+        )
+        self.disabled_rate_keys = frozenset(disabled_rate_keys or ())
+        unknown = self.disabled_rate_keys - set(self.rate_constants)
+        if unknown:
+            raise ValueError(
+                f"Unknown rate key(s) in disabled_rate_keys: {sorted(unknown)}. "
+                f"Known keys: {sorted(self.rate_constants)}"
+            )
+
+        # Chemistry configuration
+        self.couple_carbonate = couple_carbonate
+        self.salinity_inhibition = salinity_inhibition
+
+        # Tested against None rather than truthiness, so that passing an empty
+        # dict means "switch this on with the defaults" rather than silently
+        # meaning "off".
+        self.cellulose_hydrolysis = (
+            None
+            if cellulose_hydrolysis is None
+            else {**DEFAULT_CELLULOSE_HYDROLYSIS, **cellulose_hydrolysis}
+        )
+        if self.cellulose_hydrolysis:
+            self.concentrations["DOM1"] = self.cellulose_hydrolysis["dom1_initial"]
 
         # Domain
         self.dimensions = dimensions.lower()
@@ -269,25 +468,95 @@ class PFLOTRANGenerator:
     # Section builders (each returns a string)
     # ─────────────────────────────────────────────────────────────────
 
+    def _primary_species(self):
+        """Species carried as independent primary unknowns in this deck."""
+        primary = list(PRIMARY_SPECIES)
+        if self.couple_carbonate and "CO2(aq)" in primary:
+            primary.remove("CO2(aq)")
+        return primary
+
+    def _include_reaction(self, rxn):
+        """Whether a reaction from the network belongs in this deck.
+
+        Omits anything in ``disabled_rate_keys``. When the AWINHIBIT sandboxes
+        own methanogenesis, also omits the network's three methane-producing
+        reactions so the two do not double-count.
+        """
+        key = rxn.get("rate_key")
+        if key in self.disabled_rate_keys:
+            return False
+        if (
+            self.enable_aw_sandbox
+            and self.aw_sandbox_replaces_network_methanogenesis
+            and key in METHANOGENESIS_RATE_KEYS
+        ):
+            return False
+        return True
+
+    def _build_constraint_cellulose(self):
+        """Initial solid carbon inventory line for the constraint block."""
+        spec = self.cellulose_hydrolysis
+        if not spec:
+            return []
+        return [
+            f'    {spec["mineral"]:<20}{spec["volume_fraction"]}  '
+            f'{spec["surface_area"]} m^2/m^3'
+        ]
+
+    def _build_mineral_kinetics_and_sorption(self):
+        """Mineral kinetics, immobile species, gas species and sorption."""
+        block = MINERAL_KINETICS_AND_SORPTION
+        spec = self.cellulose_hydrolysis
+        if not spec:
+            return block
+        return block.replace(
+            "      MgCl2.H2O\n        RATE_CONSTANT  1.d-6 mol/m^2-sec\n      /\n",
+            "      MgCl2.H2O\n        RATE_CONSTANT  1.d-6 mol/m^2-sec\n      /\n"
+            f'      {spec["mineral"]}\n'
+            f'        RATE_CONSTANT  {spec["rate_constant"]} mol/m^2-sec\n'
+            "      /\n",
+        )
+
+    def _build_chemistry_output(self):
+        """Closing CHEMISTRY block: output requests and the database path."""
+        return CHEMISTRY_OUTPUT.format(database_path=self.database_path)
+
     def _build_species_lists(self):
-        """PRIMARY_SPECIES, DECOUPLED_EQUILIBRIUM_REACTIONS, SECONDARY_SPECIES, MINERALS"""
+        """PRIMARY_SPECIES, DECOUPLED_EQUILIBRIUM_REACTIONS, SECONDARY_SPECIES, MINERALS
+
+        When ``couple_carbonate`` is set, dissolved carbon dioxide moves out of
+        the primary list and into the secondary list. See the constructor
+        documentation for why.
+        """
+        primary = self._primary_species()
+        secondary = list(SECONDARY_SPECIES)
+        if self.couple_carbonate and "CO2(aq)" not in secondary:
+            secondary.append("CO2(aq)")
+
         lines = ["\nPRIMARY_SPECIES"]
-        for s in PRIMARY_SPECIES:
+        for s in primary:
             lines.append(f"  {s}")
         lines.append("/")
 
+        # The decoupled list is the primary list. Every primary species here is
+        # a redox or acid-base species that the database would otherwise hold at
+        # equilibrium; decoupling lets the kinetic reaction network drive them.
         lines.append("DECOUPLED_EQUILIBRIUM_REACTIONS")
-        for s in PRIMARY_SPECIES:
+        for s in primary:
             lines.append(f"  {s}")
         lines.append("/")
 
         lines.append("SECONDARY_SPECIES")
-        for s in SECONDARY_SPECIES:
+        for s in secondary:
             lines.append(f"  {s}")
         lines.append("/")
 
+        minerals = list(MINERALS)
+        if self.cellulose_hydrolysis:
+            minerals.append(self.cellulose_hydrolysis["mineral"])
+
         lines.append("MINERALS")
-        for m in MINERALS:
+        for m in minerals:
             lines.append(f"  {m}")
         lines.append("/")
         return "\n".join(lines)
@@ -330,8 +599,33 @@ class PFLOTRANGenerator:
             lines.append(f'      INHIBIT_{inh["direction"]}_THRESHOLD')
             lines.append("    /")
 
+        lines.extend(self._build_salinity_inhibition(rxn))
+
         lines.append("  /")
         return "\n".join(lines)
+
+    def _build_salinity_inhibition(self, rxn):
+        """Extra inhibition lines for one reaction, or nothing.
+
+        Applied only to the methanogenesis reactions. Inhibiting fermentation
+        or the oxidation steps as well would suppress the whole carbon chain
+        rather than the methanogens specifically, which is not what the salt
+        stress in these incubations is understood to do.
+        """
+        spec = self.salinity_inhibition
+        if not spec or rxn.get("rate_key") not in METHANOGENESIS_RATE_KEYS:
+            return []
+
+        lines = [
+            "    INHIBITION",
+            f'      SPECIES_NAME        {spec["species"]}',
+            "      TYPE SMOOTHSTEP",
+            f'      SMOOTHSTEP_INTERVAL {spec.get("interval", 1.0):.2f}',
+            f'      THRESHOLD_CONCENTRATION {spec["threshold"]:.2e}',
+            "      INHIBIT_ABOVE_THRESHOLD",
+            "    /",
+        ]
+        return lines
 
     def _build_general_reaction(self, rxn):
         """Render one GENERAL_REACTION block."""
@@ -349,30 +643,92 @@ class PFLOTRANGenerator:
         """All MICROBIAL + GENERAL reactions."""
         blocks = []
         for rxn in MICROBIAL_REACTIONS:
+            if not self._include_reaction(rxn):
+                continue
             blocks.append(self._build_microbial_reaction(rxn))
         for rxn in GENERAL_REACTIONS:
+            if not self._include_reaction(rxn):
+                continue
             blocks.append(self._build_general_reaction(rxn))
         return "\n\n".join(blocks)
 
     def _build_reaction_sandbox(self):
-        """REACTION_SANDBOX block for water activity inhibition.
+        """REACTION_SANDBOX block: a_w-inhibited methanogenesis.
 
-        Three sandboxes targeting different methanogenesis pathways:
-          AWINHIBIT        — hydrogenotrophic (4 H2 + HCO3- + H+ -> CH4 + 3 H2O)
-          AWINHIBITACETATE — acetoclastic (Acetate- + H2O -> CH4 + HCO3-)
-          AWINHIBITMETHYL  — methylotrophic (CH3OH + H2 -> CH4 + H2O)
+        Three sandboxes, each carrying the corresponding network Monod rate
+        law so they can replace ``MICROBIAL_REACTION`` methanogenesis rather
+        than run as a dead parallel pathway:
 
-        Parameters read by Fortran sandbox code:
-          WATER_ACTIVITY_THRESHOLD — a_w below which reaction is fully inhibited
-          RATE_CONSTANT — base rate [mol/(m³·s)] for the sandbox reaction
-          INHIBITION_TYPE — THRESHOLD (binary) or SMOOTHSTEP (gradual)
+          AWINHIBIT        — hydrogenotrophic
+          AWINHIBITACETATE — acetoclastic
+          AWINHIBITMETHYL  — methylotrophic
+
+        Rate constants and half-saturations are taken from the same defaults
+        as the network reactions. Inhibition mode comes from
+        ``aw_inhibition_type``. Per-pathway ``WATER_ACTIVITY_THRESHOLD``
+        values follow acetoclastic > methylotrophic > hydrogenotrophic
+        salt sensitivity (literature ordering; not a methane fit).
         """
-        sandbox_names = ["AWINHIBIT", "AWINHIBITACETATE", "AWINHIBITMETHYL"]
+        general = self.thresholds["general"]
+        o2_inh = self.thresholds["o2_inhibition"]
+        fe_inh = self.thresholds["fe_inhibition"]
+        specs = (
+            {
+                "name": "AWINHIBIT",
+                "rate_key": "hydrogenotrophic_methano",
+                "aw_threshold": self.aw_threshold,
+                "extra": [
+                    f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
+                    f"    HALF_SATURATION_HCO3 {self._get_ks('hco3'):.2e}",
+                    f"    THRESHOLD_H2 {general:.2e}",
+                    f"    THRESHOLD_HCO3 {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                    f"    FE_INHIBITION {fe_inh:.2e}",
+                    f"    H_INHIBITION {self.thresholds['h_plus_inhibition_1']:.2e}",
+                ],
+            },
+            {
+                "name": "AWINHIBITACETATE",
+                "rate_key": "acetaclastic_methano",
+                "aw_threshold": self.aw_threshold_acetate,
+                "extra": [
+                    f"    HALF_SATURATION_ACETATE {self._get_ks('acetate'):.2e}",
+                    f"    THRESHOLD_ACETATE {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                    f"    FE_INHIBITION {fe_inh:.2e}",
+                    f"    H_INHIBITION_ABOVE "
+                    f"{self.thresholds['h_plus_inhibition_2']:.2e}",
+                    f"    H_INHIBITION_BELOW "
+                    f"{self.thresholds['h_plus_inhibition_3']:.2e}",
+                ],
+            },
+            {
+                "name": "AWINHIBITMETHYL",
+                "rate_key": "methylotrophic_methano",
+                "aw_threshold": self.aw_threshold_methyl,
+                "extra": [
+                    f"    HALF_SATURATION_CH3OH {self._get_ks('ch3oh'):.2e}",
+                    f"    HALF_SATURATION_H2 {self._get_ks('h2'):.2e}",
+                    f"    THRESHOLD_CH3OH {general:.2e}",
+                    f"    THRESHOLD_H2 {general:.2e}",
+                    f"    O2_INHIBITION {o2_inh:.2e}",
+                ],
+            },
+        )
+
         lines = ["\nREACTION_SANDBOX"]
-        for name in sandbox_names:
-            lines.append(f"  {name}")
-            lines.append(f"    WATER_ACTIVITY_THRESHOLD {self.aw_threshold:.1e}")
-            lines.append(f"    RATE_CONSTANT {self.aw_rate_constant:.1e}")
+        for spec in specs:
+            rate = self.rate_constants[spec["rate_key"]]
+            lines.append(f"  {spec['name']}")
+            lines.append(
+                f"    WATER_ACTIVITY_THRESHOLD {float(spec['aw_threshold']):.4f}"
+            )
+            if self.fixed_water_activity is not None:
+                lines.append(
+                    f"    FIXED_WATER_ACTIVITY {float(self.fixed_water_activity):.6f}"
+                )
+            lines.append(f"    RATE_CONSTANT {rate:.2e}")
+            lines.extend(spec["extra"])
             lines.append(f"    INHIBITION_TYPE {self.aw_inhibition_type}")
             lines.append("  /")
         lines.append("/")
@@ -391,8 +747,10 @@ class PFLOTRANGenerator:
             "  CONCENTRATIONS",
         ]
 
-        # Parameterized species from self.concentrations
-        for species in PRIMARY_SPECIES:
+        # Parameterized species from self.concentrations. A species that has
+        # been moved to the secondary list is computed by PFLOTRAN rather than
+        # constrained, so it must not appear here.
+        for species in self._primary_species():
             if species in self.concentrations:
                 lines.append(f"    {species:20s}{self.concentrations[species]}")
             elif species in TRACE_SPECIES:
@@ -408,6 +766,7 @@ class PFLOTRANGenerator:
                 "    Fe(OH)2             7.2d-1  1.d2 m^2/m^3",
                 "    Rock(s)             0.5  5.0e3 m^2/m^3",
                 "    MgCl2.H2O           1.0d-02  1.0e2 m^2/m^3",
+                *self._build_constraint_cellulose(),
                 "  /",
                 "END",
             ]
@@ -567,10 +926,10 @@ END_SUBSURFACE"""
         sections = [
             HEADER.format(timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
             self._build_species_lists(),
-            MINERAL_KINETICS_AND_SORPTION,
+            self._build_mineral_kinetics_and_sorption(),
             self._build_all_reactions(),
             self._build_reaction_sandbox() if self.enable_aw_sandbox else "",
-            CHEMISTRY_OUTPUT.format(database_path=self.database_path),
+            self._build_chemistry_output(),
             self._build_constraints(),
             SOLVER,
             self._build_grid_and_time(),
@@ -592,6 +951,8 @@ END_SUBSURFACE"""
         print(f"  a_w threshold: {self.aw_threshold}")
         print(f"  Cl⁻ inhibition: {'ON' if self.enable_cl_inhibition else 'OFF'}")
         print(f"  a_w sandbox: {'ON' if self.enable_aw_sandbox else 'OFF'}")
+        if self.disabled_rate_keys:
+            print(f"  Reactions omitted: {', '.join(sorted(self.disabled_rate_keys))}")
         return filename
 
 

@@ -1,0 +1,47 @@
+Forecast uses live-comparison decks (cellulose hydrolysis, ONE_MINUS_AW AWINHIBIT, no network Cl- Monod).
+Objective: interval-averaged production rates, skipping intervals starting at or below day 20.
+Warm start: measured CH4 and CO2 headspace at day 20 written into initial constraints.
+
+
+============================================================================
+Exp003: 8 batches, production sampling days [56, 91, 119, 257]
+============================================================================
+  anchor day        20 (decks warm-started from interpolated measured CH4 and CO2 headspace)
+  fitting on days   [56, 91]
+  predicting days   [119, 257]
+  scoring on flux   intervals starting after day 20 (mol/day, average over each sampling interval)
+  fit intervals     [(56, 91)]
+  predict intervals [(91, 119), (119, 257)]
+  (day 0 excluded: a baseline reading, not a production measurement)
+
+  selected: ONE_MINUS_AW a_crit H2=0.80, methyl=0.85, acetate=0.90
+    score on the fitting window   0.93   (8 points)
+    score on the held-out rounds  0.90   (16 points)
+    (scores are on interval-averaged production rates, not cumulative moles)
+    wrote output/comparison/forecast_anchor20/Exp003_holdout-20d_flux_anchor-20d_fit-first-2-rounds/methane_forecast.png
+
+============================================================================
+Exp004: 7 batches, production sampling days [52, 87, 122, 259]
+============================================================================
+  anchor day        20 (decks warm-started from interpolated measured CH4 and CO2 headspace)
+  fitting on days   [52, 87]
+  predicting days   [122, 259]
+  scoring on flux   intervals starting after day 20 (mol/day, average over each sampling interval)
+  fit intervals     [(52, 87)]
+  predict intervals [(87, 122), (122, 259)]
+  (day 0 excluded: a baseline reading, not a production measurement)
+
+  selected: ONE_MINUS_AW a_crit H2=0.90, methyl=0.95, acetate=1.00
+    WARNING: hydrogenotrophic a_crit 0.9 sits on the edge of the grid, so the true optimum is outside it. The fit is reporting the closest thing the grid allows, not a minimum.
+    score on the fitting window   0.39   (7 points)
+    score on the held-out rounds  0.66   (14 points)
+    (scores are on interval-averaged production rates, not cumulative moles)
+    wrote output/comparison/forecast_anchor20/Exp004_holdout-20d_flux_anchor-20d_fit-first-2-rounds/methane_forecast.png
+
+============================================================================
+SUMMARY
+============================================================================
+  Exp003  a_crit H2=0.80 methyl=0.85 acetate=0.90   fitted 0.93   predicted 0.90
+  Exp004  a_crit H2=0.90 methyl=0.95 acetate=1.00   fitted 0.39   predicted 0.66
+
+  wrote output/comparison/forecast_anchor20/README.md
